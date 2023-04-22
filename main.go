@@ -5,15 +5,12 @@ import (
 	"github.com/gin-gonic/gin"
 	cors "github.com/itsjamie/gin-cors"
 	"github.com/joho/godotenv"
-	"github.com/sirupsen/logrus"
 	"go-computing-provider/initializer"
 	"go-computing-provider/routers"
 	"os"
 	"strconv"
 	"time"
 )
-
-var log = logrus.New()
 
 func LoadEnv() {
 	err := godotenv.Load(".env")

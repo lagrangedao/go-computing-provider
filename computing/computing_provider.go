@@ -8,7 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/filswan/go-swan-lib/logs"
 	"go-computing-provider/models"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -28,7 +27,7 @@ func generateNodeID() (string, string, string) {
 	var privateKeyBytes []byte
 
 	if _, err := os.Stat(privateKeyPath); err == nil {
-		privateKeyBytes, err = ioutil.ReadFile(privateKeyPath)
+		privateKeyBytes, err = os.ReadFile(privateKeyPath)
 		if err != nil {
 			log.Fatalf("Error reading private key: %v", err)
 		}
@@ -46,7 +45,7 @@ func generateNodeID() (string, string, string) {
 			log.Fatalf("Error creating directory for private key: %v", err)
 		}
 
-		err = ioutil.WriteFile(privateKeyPath, privateKeyBytes, 0644)
+		err = os.WriteFile(privateKeyPath, privateKeyBytes, 0644)
 		if err != nil {
 			log.Fatalf("Error writing private key: %v", err)
 		}
@@ -56,7 +55,6 @@ func generateNodeID() (string, string, string) {
 	if err != nil {
 		log.Fatalf("Error converting private key bytes: %v", err)
 	}
-
 	nodeID := hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey))
 	peerID := hashPublicKey(&privateKey.PublicKey)
 	address := crypto.PubkeyToAddress(privateKey.PublicKey).String()

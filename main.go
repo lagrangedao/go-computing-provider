@@ -1,95 +1,47 @@
 package main
 
 import (
-	"crypto/ecdsa"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/filswan/go-swan-lib/logs"
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
+	cors "github.com/itsjamie/gin-cors"
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
-	"go-computing-provider/models"
-	"io/ioutil"
+	"go-computing-provider/initializer"
+	"go-computing-provider/routers"
 	"os"
-	"path/filepath"
-	"runtime"
+	"strconv"
+	"time"
 )
 
 var log = logrus.New()
 
-func generateNodeID() (string, string) {
-	privateKeyPath := ".swan_node/private_key"
-	var privateKeyBytes []byte
-
-	if _, err := os.Stat(privateKeyPath); err == nil {
-		privateKeyBytes, err = ioutil.ReadFile(privateKeyPath)
-		if err != nil {
-			log.Fatalf("Error reading private key: %v", err)
-		}
-		log.Printf("Found key in %s", privateKeyPath)
-	} else {
-		log.Printf("Created key in %s", privateKeyPath)
-		privateKeyBytes = make([]byte, 32)
-		_, err := rand.Read(privateKeyBytes)
-		if err != nil {
-			log.Fatalf("Error generating random key: %v", err)
-		}
-
-		err = os.MkdirAll(filepath.Dir(privateKeyPath), os.ModePerm)
-		if err != nil {
-			log.Fatalf("Error creating directory for private key: %v", err)
-		}
-
-		err = ioutil.WriteFile(privateKeyPath, privateKeyBytes, 0644)
-		if err != nil {
-			log.Fatalf("Error writing private key: %v", err)
-		}
-	}
-
-	privateKey, err := crypto.ToECDSA(privateKeyBytes)
+func LoadEnv() {
+	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatalf("Error converting private key bytes: %v", err)
+		logs.GetLogger().Error(err)
 	}
 
-	nodeID := hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey))
-	peerID := hashPublicKey(&privateKey.PublicKey)
-	return nodeID, peerID
+	logs.GetLogger().Info("name: ", os.Getenv("privateKey"))
 }
 
-func hashPublicKey(publicKey *ecdsa.PublicKey) string {
-	publicKeyBytes := crypto.FromECDSAPub(publicKey)
-	hash := sha256.Sum256(publicKeyBytes)
-	return hex.EncodeToString(hash[:])
-}
-func getSwanServiceProviderInfo() *models.HostInfo {
-	info := new(models.HostInfo)
-	//info.SwanProviderVersion = common.GetVersion()
-	info.OperatingSystem = runtime.GOOS
-	info.Architecture = runtime.GOARCH
-	info.CPUCores = runtime.NumCPU()
-
-	return info
-}
 func main() {
-	log.SetFormatter(&logrus.TextFormatter{})
-	log.SetLevel(logrus.InfoLevel)
+	logs.GetLogger().Info("Start in computing provider mode.")
+	initializer.ProjectInit()
 
-	hostInfo := getSwanServiceProviderInfo()
-	hostInfoJSON, err := json.Marshal(hostInfo)
+	r := gin.Default()
+	r.Use(cors.Middleware(cors.Config{
+		Origins:         "*",
+		Methods:         "GET, PUT, POST, DELETE",
+		RequestHeaders:  "Origin, Authorization, Content-Type",
+		ExposedHeaders:  "",
+		MaxAge:          50 * time.Second,
+		ValidateHeaders: false,
+	}))
+
+	v1 := r.Group("/api/v1")
+	routers.CPManager(v1.Group("/computing"))
+	err := r.Run(":" + strconv.Itoa(8085))
 	if err != nil {
-		log.Fatalf("Failed to marshal host info: %v", err)
-	}
-	log.Info("Swan Service Provider Host Info: ", string(hostInfoJSON))
-
-	gin.SetMode(gin.DebugMode)
-	router := gin.Default()
-
-	// Register your routes here
-	// ...
-
-	err = router.Run(":8085")
-	if err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		logs.GetLogger().Fatal(err)
 	}
 }

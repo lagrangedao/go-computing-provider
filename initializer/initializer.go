@@ -23,7 +23,7 @@ func LoadEnv() {
 
 func sendHeartbeat(nodeId string) {
 	// Replace the following URL with your Flask application's heartbeat endpoint URL
-	heartbeatURL := "http://localhost:5002/cp/heartbeat"
+	heartbeatURL := os.Getenv("LAGRANGE_HOST") + "/cp/heartbeat"
 	payload := strings.NewReader(fmt.Sprintf(`{
     "node_id": "%s",
     "status": "Active"

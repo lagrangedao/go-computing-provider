@@ -4,22 +4,11 @@ import (
 	"github.com/filswan/go-swan-lib/logs"
 	"github.com/gin-gonic/gin"
 	cors "github.com/itsjamie/gin-cors"
-	"github.com/joho/godotenv"
 	"go-computing-provider/initializer"
 	"go-computing-provider/routers"
-	"os"
 	"strconv"
 	"time"
 )
-
-func LoadEnv() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		logs.GetLogger().Error(err)
-	}
-
-	logs.GetLogger().Info("name: ", os.Getenv("privateKey"))
-}
 
 func main() {
 	logs.GetLogger().Info("Start in computing provider mode.")

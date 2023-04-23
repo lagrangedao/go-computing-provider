@@ -1,7 +1,6 @@
 package routers
 
 import (
-	"github.com/filswan/go-swan-lib/logs"
 	"github.com/gin-gonic/gin"
 	"go-computing-provider/common"
 	"go-computing-provider/computing"
@@ -30,9 +29,13 @@ func receiveJob(c *gin.Context) {
 
 	c.JSON(http.StatusOK, result)
 }
+
 func processJob(jobData models.JobData) interface{} {
 	// Add your job processing logic here
-	logs.GetLogger().Info("Processing job: %+v\n", jobData)
+
+	log.Printf("Processing job: %+v\n", jobData)
+	jobSourceURI := jobData.JobSourceURI // Assuming 'Name' is the space name in the JobData struct
+	computing.BuildSpaceTask(jobSourceURI)
 	return nil
 }
 func CPManager(router *gin.RouterGroup) {

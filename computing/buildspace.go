@@ -45,7 +45,7 @@ func getSpaceName(apiURL string) (string, error) {
 	return spaceName, nil
 }
 
-func BuildSpaceTask(jobSourceURI string) {
+func BuildSpaceTask(jobSourceURI string) (string, string) {
 	apiURL := jobSourceURI
 	spaceName, err := getSpaceName(apiURL)
 
@@ -55,15 +55,20 @@ func BuildSpaceTask(jobSourceURI string) {
 	resp, err := http.Get(spaceAPIURL)
 	if err != nil {
 		log.Printf("Error making request to Space API: %v", err)
-		return
+		return "", ""
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	log.Printf("Space API response received. Response: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Space API response not OK. Status Code: %d", resp.StatusCode)
-		return
+		return "", ""
 	}
 
 	var spaceJSON struct {
@@ -77,22 +82,25 @@ func BuildSpaceTask(jobSourceURI string) {
 
 	if err := json.NewDecoder(resp.Body).Decode(&spaceJSON); err != nil {
 		log.Printf("Error decoding Space API response JSON: %v", err)
-		return
+		return "", ""
 	}
 
 	files := spaceJSON.Data.Files
-	buildFolder := "computing_provider/static/build/"
+	buildFolder := "build/"
 
 	if len(files) > 0 {
 		downloadSpacePath := filepath.Join(filepath.Dir(files[0].Name), filepath.Base(files[0].Name))
 		for _, file := range files {
 			dirPath := filepath.Dir(file.Name)
-			os.MkdirAll(filepath.Join(buildFolder, dirPath), os.ModePerm)
+			err := os.MkdirAll(filepath.Join(buildFolder, dirPath), os.ModePerm)
+			if err != nil {
+				return "", ""
+			}
 
-			err := downloadFile(filepath.Join(buildFolder, file.Name), file.URL)
+			err = downloadFile(filepath.Join(buildFolder, file.Name), file.URL)
 			if err != nil {
 				log.Printf("Error downloading file: %v", err)
-				return
+				return "", ""
 			}
 
 			log.Printf("Download %s successfully.", spaceName)
@@ -101,13 +109,15 @@ func BuildSpaceTask(jobSourceURI string) {
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
 
 		imageName := "lagrange/" + spaceName
-
+		dockerfilePath := filepath.Join(imagePath, "Dockerfile")
 		log.Printf("Image path: %s", imagePath)
 
 		err = buildDockerImage(imagePath, imageName)
 		if err != nil {
 			log.Printf("Error building Docker image: %v", err)
-			return
+			return "", ""
+		} else {
+			return imageName, dockerfilePath
 		}
 
 		// dockerClient and other Kubernetes-related instances should be set up beforehand
@@ -115,19 +125,30 @@ func BuildSpaceTask(jobSourceURI string) {
 	} else {
 		log.Printf("Space %s is not found.", spaceName)
 	}
+	return "", ""
 }
 func downloadFile(filepath string, url string) error {
 	out, err := os.Create(filepath)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func(out *os.File) {
+		err := out.Close()
+		if err != nil {
+
+		}
+	}(out)
 
 	resp, err := http.Get(url)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)

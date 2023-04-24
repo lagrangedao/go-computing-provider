@@ -32,12 +32,16 @@ func receiveJob(c *gin.Context) {
 
 func processJob(jobData models.JobData) interface{} {
 	// Add your job processing logic here
-
 	log.Printf("Processing job: %+v\n", jobData)
-	jobSourceURI := jobData.JobSourceURI // Assuming 'Name' is the space name in the JobData struct
-	computing.BuildSpaceTask(jobSourceURI)
+	jobSourceURI := jobData.JobSourceURI
+	imageName, dockerfilePath := computing.BuildSpaceTask(jobSourceURI)
+	url := computing.RunContainer(imageName, dockerfilePath)
+
+	log.Printf("Running at: %s", url)
+
 	return nil
 }
+
 func CPManager(router *gin.RouterGroup) {
 
 	router.GET("/host/info", GetServiceProviderInfo)

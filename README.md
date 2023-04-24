@@ -21,6 +21,12 @@ cd go-computing-provider
 go mod tidy
 ```
 
+3. Create a .env file by copying the .env_sample file and updating the values.
+
+```shell
+cp .env_sample .env
+```
+
 ## Running the Application
 
 To run the application, use the go run command:

@@ -26,7 +26,11 @@ go mod tidy
 ```shell
 cp .env_sample .env
 ```
+4. start a redis stack
 
+```shell
+docker run -d --name redis-stack-server -p 6379:6379 redis/redis-stack-server:latest
+```
 ## Running the Application
 
 To run the application, use the go run command:

@@ -52,7 +52,7 @@ func RunContainer(imageName, dockerfilePath string) string {
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	cmd := exec.Command("docker", "run", "-d", "-p", "7860:7860", imageName)
+	cmd := exec.Command("docker", "run", "-d", "-p", portMapping, imageName)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 

@@ -5,7 +5,6 @@ import (
 	"go-mcs-sdk/mcs/api/bucket"
 	"go-mcs-sdk/mcs/api/user"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -41,10 +40,10 @@ func (storage *StorageService) UploadFileToBucket(objectName, filePath string, r
 	}
 	buketClient := bucket.GetBucketClient(*mcsClient)
 
-	if _, err := buketClient.CreateFolder(storage.BucketName, filepath.Dir(objectName), ""); err != nil {
-		logs.GetLogger().Errorf("Failed create folder, error: %v", err)
-		return nil, err
-	}
+	//if _, err := buketClient.CreateFolder(storage.BucketName, filepath.Dir(objectName), ""); err != nil {
+	//	logs.GetLogger().Errorf("Failed create folder, error: %v", err)
+	//	return nil, err
+	//}
 
 	file, err := buketClient.GetFile(storage.BucketName, objectName)
 	if err != nil && !strings.Contains(err.Error(), "record not found") {

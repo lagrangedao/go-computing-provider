@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go-mcs-sdk/mcs/api/common/logs"
 	"io"
 	"log"
 	"net/http"
@@ -48,6 +49,10 @@ func getSpaceName(apiURL string) (string, error) {
 func BuildSpaceTask(jobSourceURI string) (string, string) {
 	apiURL := jobSourceURI
 	spaceName, err := getSpaceName(apiURL)
+	if err != nil {
+		logs.GetLogger().Errorf("Error get space name: %v", err)
+		return "", ""
+	}
 
 	log.Printf("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 

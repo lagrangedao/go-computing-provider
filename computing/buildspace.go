@@ -111,22 +111,22 @@ func BuildSpaceTask(jobSourceURI string) (string, string) {
 			log.Printf("Download %s successfully.", spaceName)
 		}
 
+		imageName := "sonic868/" + spaceName
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
-
-		imageName := "lagrange/" + spaceName
 		dockerfilePath := filepath.Join(imagePath, "Dockerfile")
 		log.Printf("Image path: %s", imagePath)
 
-		err = buildDockerImage(imagePath, imageName)
-		if err != nil {
-			log.Printf("Error building Docker image: %v", err)
+		dockerService := NewDockerService()
+		if err := dockerService.BuildImage(imagePath, spaceName, imageName); err != nil {
+			logs.GetLogger().Errorf("Error building Docker image: %v", err)
 			return "", ""
-		} else {
-			return imageName, dockerfilePath
+		}
+		if err := dockerService.PushImage(imageName); err != nil {
+			logs.GetLogger().Errorf("Error Push Docker image: %v", err)
+			return "", ""
 		}
 
-		// dockerClient and other Kubernetes-related instances should be set up beforehand
-		// ...
+		return imageName, dockerfilePath
 	} else {
 		log.Printf("Space %s is not found.", spaceName)
 	}

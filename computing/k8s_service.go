@@ -69,7 +69,6 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 				},
 
 				Spec: coreV1.PodSpec{
-					//ImagePullSecrets: coreV1.
 					Containers: []coreV1.Container{{
 						Name:            deploy.ContainerName,
 						Image:           deploy.ImageName,
@@ -127,6 +126,14 @@ func (s *K8sService) GetPods(namespace string) {
 	}
 }
 
+func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
+	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
+}
+
+func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
+	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
+}
+
 type DeploymentReq struct {
 	ContainerName string
 	ImageName     string
@@ -141,7 +148,6 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string) strin
 		return ""
 	}
 
-	containerName := "computing-worker" + spaceName
 	containerPort, err := strconv.ParseInt(exposedPort, 10, 64)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed to convert exposed port: %v", err)
@@ -150,8 +156,8 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string) strin
 
 	k8sService := NewK8sService()
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), coreV1.NamespaceDefault, DeploymentReq{
-		ContainerName: containerName,
-		ImageName:     imageName,
+		ContainerName: "cp-worker-" + spaceName,
+		ImageName:     "docker.io/" + imageName,
 		Label:         map[string]string{"app": spaceName},
 		ContainerPort: int32(containerPort),
 	})
@@ -173,13 +179,14 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string) strin
 			Type: coreV1.ServiceTypeNodePort,
 			Ports: []coreV1.ServicePort{
 				{
+					Name:       "http",
 					Port:       int32(containerPort),
-					TargetPort: intstr.FromString(exposedPort),
+					TargetPort: intstr.FromInt(int(containerPort)),
 					Protocol:   coreV1.ProtocolTCP,
 				},
 			},
 			Selector: map[string]string{
-				"app": containerName,
+				"app": spaceName,
 			},
 		},
 	}
@@ -198,11 +205,11 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string) strin
 	port := service.Spec.Ports[0].NodePort
 	fmt.Printf("Service is exposed at %s:%d\n", config.Host, port)
 
-	hostIp, err := k8sService.GetNodeList()
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return ""
-	}
-	url := "http://" + hostIp + ":" + strconv.Itoa(int(port))
+	//hostIp, err := k8sService.GetNodeList()
+	//if err != nil {
+	//	logs.GetLogger().Error(err)
+	//	return ""
+	//}
+	url := "http://127.0.0.1" + ":" + strconv.Itoa(int(port))
 	return url
 }

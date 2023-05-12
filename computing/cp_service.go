@@ -1,6 +1,7 @@
 package computing
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -8,6 +9,7 @@ import (
 	"go-computing-provider/constants"
 	"go-computing-provider/models"
 	"go-mcs-sdk/mcs/api/common/logs"
+	coreV1 "k8s.io/api/core/v1"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -46,19 +48,17 @@ func processJob(jobData models.JobData) interface{} {
 	logs.GetLogger().Infof("Processing job: %s", jobData.JobSourceURI)
 	jobSourceURI := jobData.JobSourceURI
 	imageName, dockerfilePath := BuildSpaceTask(jobSourceURI)
-	url := RunContainer(imageName, dockerfilePath)
 
-	//spaceName, err := getSpaceName(jobSourceURI)
-	//if err != nil {
-	//	logs.GetLogger().Errorf("Error get space name: %v", err)
-	//	return ""
-	//}
-	//url := runContainerToK8s(imageName, dockerfilePath, spaceName)
-
+	spaceName, err := getSpaceName(jobSourceURI)
+	if err != nil {
+		logs.GetLogger().Errorf("Error get space name: %v", err)
+		return ""
+	}
+	url := runContainerToK8s(imageName, dockerfilePath, spaceName)
+	jobData.JobResultURI = url
 	submitJob(&jobData)
 
 	logs.GetLogger().Infof("Running at: %s", url)
-
 	return nil
 }
 
@@ -85,7 +85,7 @@ func submitJob(jobData *models.JobData) {
 		return
 	}
 
-	mcsOssFile, err := NewStorageService().UploadFileToBucket(jobDetailFile, taskDetailFilePath, false)
+	mcsOssFile, err := NewStorageService().UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
 		return
@@ -93,4 +93,18 @@ func submitJob(jobData *models.JobData) {
 	mcsFileJson, _ := json.Marshal(mcsOssFile)
 	logs.GetLogger().Printf("Job submitted to IPFS %s", string(mcsFileJson))
 	jobData.JobResultURI = "" + "/ipfs/" + mcsOssFile.PayloadCid
+}
+
+func DeleteSpaceTask(c *gin.Context) {
+	spaceName := c.Param("task_name")
+	k8sService := NewK8sService()
+	if err := k8sService.DeleteService(context.TODO(), coreV1.NamespaceDefault, spaceName); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	if err := k8sService.DeleteDeployment(context.TODO(), coreV1.NamespaceDefault, spaceName); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
 }

@@ -78,7 +78,22 @@ func TestTar(t *testing.T) {
 
 func TestDockerBuild(t *testing.T) {
 	dockerService := computing.NewDockerService()
-	buildPath := "build/0xe259F84193604f9c8228940Ab5cB5c62Dfb514d6/spaces/demo001"
-	spaceName := "DEMO-123"
-	dockerService.BuildImage(buildPath, spaceName)
+	//buildPath := "build/0xe259F84193604f9c8228940Ab5cB5c62Dfb514d6/spaces/demo001"
+	//spaceName := "DEMO-123"
+	imageName := "sonic868/demo:v2.0"
+	//dockerService.BuildImage(buildPath, spaceName, imageName)
+	err := dockerService.PushImage(imageName)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func TestNewStorageService(t *testing.T) {
+	service := computing.NewStorageService()
+	service.McsApiKey = "3noBa2Jc7Nvjv6kGA3M9Uv"
+	service.McsAccessToken = "dgerpbOgRfnwWPJOEx0bxdoUGGSoKYuc"
+	service.NetWork = "polygon.mainnet"
+	service.BucketName = "test001"
+	path := "cp-cache/jobs/ea015a0d-c78b-4c0e-9103-99fbc8818d89.json"
+	service.UploadFileToBucket("demo.json", path, false)
 }

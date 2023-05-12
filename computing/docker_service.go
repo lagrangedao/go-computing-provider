@@ -160,11 +160,11 @@ func RemoveContainerIfExists(imageName string) error {
 	return nil
 }
 
-func (ds *DockerService) BuildImage(buildPath, spaceName, imageName string) {
+func (ds *DockerService) BuildImage(buildPath, spaceName, imageName string) error {
 	tarPath, err := tarDir(buildPath, spaceName)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed tar space, error: %+v", err)
-		return
+		return err
 	}
 	dockerBuildContext, err := os.Open(tarPath)
 	defer dockerBuildContext.Close()
@@ -175,13 +175,10 @@ func (ds *DockerService) BuildImage(buildPath, spaceName, imageName string) {
 	})
 	if err != nil {
 		fmt.Printf("%s", err.Error())
-		return
+		return err
 	}
 	defer buildResponse.Body.Close()
-	err = printOut(buildResponse.Body)
-	if err != nil {
-		return
-	}
+	return printOut(buildResponse.Body)
 }
 
 type ErrorLine struct {
@@ -198,7 +195,7 @@ func (ds *DockerService) PushImage(imagesName string) error {
 	var authConfig = types.AuthConfig{
 		Username:      os.Getenv("OUR_DOCKER_USERNAME"),
 		Password:      os.Getenv("OUR_DOCKER_PASSWORD"),
-		ServerAddress: "https://index.docker.io/v1/",
+		ServerAddress: "https://hub.docker.com/",
 	}
 	authConfigBytes, _ := json.Marshal(authConfig)
 	authConfigEncoded := base64.URLEncoding.EncodeToString(authConfigBytes)
@@ -221,7 +218,7 @@ func printOut(rd io.Reader) error {
 	scanner := bufio.NewScanner(rd)
 	for scanner.Scan() {
 		lastLine = scanner.Text()
-		fmt.Println(scanner.Text())
+		println(scanner.Text())
 	}
 	errLine := &ErrorLine{}
 	json.Unmarshal([]byte(lastLine), errLine)

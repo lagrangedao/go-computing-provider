@@ -10,3 +10,5 @@ const BiddingProcessing string = "processing"
 const BiddingSubmitted string = "submitted"
 const BiddingCompleted string = "completed"
 const BiddingCancelled string = "cancelled"
+
+const TASK_DEPLOY string = "worker.deploy"

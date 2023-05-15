@@ -5,6 +5,7 @@ import (
 	"github.com/filswan/go-swan-lib/logs"
 	"github.com/joho/godotenv"
 	"github.com/lagrangedao/go-computing-provider/computing"
+	"github.com/lagrangedao/go-computing-provider/constants"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -62,5 +63,9 @@ func ProjectInit() {
 	nodeID := computing.InitComputingProvider()
 	// Start sending heartbeats
 	go sendHeartbeats(nodeID)
+
+	celeryService := computing.NewCeleryService()
+	celeryService.RegisterTask(constants.TASK_DEPLOY, computing.DeploySpaceTask)
+	celeryService.Start()
 
 }

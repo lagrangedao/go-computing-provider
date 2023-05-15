@@ -11,23 +11,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
-
-func buildDockerImage(imagePath, imageName string) error {
-	cmd := exec.Command("docker", "build", "-t", imageName, imagePath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func getSpaceName(apiURL string) (string, error) {
 	parsedURL, err := url.Parse(apiURL)
@@ -46,14 +32,7 @@ func getSpaceName(apiURL string) (string, error) {
 	return spaceName, nil
 }
 
-func BuildSpaceTask(jobSourceURI string) (string, string) {
-	apiURL := jobSourceURI
-	spaceName, err := getSpaceName(apiURL)
-	if err != nil {
-		logs.GetLogger().Errorf("Error get space name: %v", err)
-		return "", ""
-	}
-
+func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 	log.Printf("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 
 	spaceAPIURL := fmt.Sprintf(jobSourceURI)
@@ -107,11 +86,10 @@ func BuildSpaceTask(jobSourceURI string) (string, string) {
 				log.Printf("Error downloading file: %v", err)
 				return "", ""
 			}
-
 			log.Printf("Download %s successfully.", spaceName)
 		}
 
-		imageName := "sonic868/" + spaceName
+		imageName := "lagrange/" + spaceName
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
 		dockerfilePath := filepath.Join(imagePath, "Dockerfile")
 		log.Printf("Image path: %s", imagePath)
@@ -121,17 +99,13 @@ func BuildSpaceTask(jobSourceURI string) (string, string) {
 			logs.GetLogger().Errorf("Error building Docker image: %v", err)
 			return "", ""
 		}
-		if err := dockerService.PushImage(imageName); err != nil {
-			logs.GetLogger().Errorf("Error Push Docker image: %v", err)
-			return "", ""
-		}
-
 		return imageName, dockerfilePath
 	} else {
 		log.Printf("Space %s is not found.", spaceName)
 	}
 	return "", ""
 }
+
 func downloadFile(filepath string, url string) error {
 	out, err := os.Create(filepath)
 	if err != nil {

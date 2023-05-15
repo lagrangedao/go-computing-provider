@@ -3,7 +3,7 @@ package test
 import (
 	"archive/tar"
 	"fmt"
-	"go-computing-provider/computing"
+	"github.com/lagrangedao/go-computing-provider/computing"
 	"io"
 	"log"
 	"os"
@@ -90,10 +90,23 @@ func TestDockerBuild(t *testing.T) {
 
 func TestNewStorageService(t *testing.T) {
 	service := computing.NewStorageService()
-	service.McsApiKey = "3noBa2Jc7Nvjv6kGA3M9Uv"
-	service.McsAccessToken = "dgerpbOgRfnwWPJOEx0bxdoUGGSoKYuc"
+	service.McsApiKey = "wxE8QdLUANzq6zAwosEUOw"
+	service.McsAccessToken = "4efvcH9opkLp0pS3QDACbI0hpCO5lTcp"
 	service.NetWork = "polygon.mainnet"
-	service.BucketName = "test001"
-	path := "cp-cache/jobs/ea015a0d-c78b-4c0e-9103-99fbc8818d89.json"
-	service.UploadFileToBucket("demo.json", path, false)
+	service.BucketName = "Test002"
+
+	path := "/Users/sonic/Documents/python_space/go-computing-provider/cp-cache/jobs/ea015a0d-c78b-4c0e-9103-99fbc8818d89.json"
+	ossFile, err := service.UploadFileToBucket("demo.json", path, false)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Printf("%+v \n", ossFile)
+
+	service.GetGatewayUrl()
+	//service.DeleteBucket("demo")
+
+	//service.CreateBucket("demo")
+
+	//service.CreateFolder("jobs")
+
 }

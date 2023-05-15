@@ -10,17 +10,18 @@ import (
 )
 
 var storage *StorageService
-var once sync.Once
+var storageOnce sync.Once
 
 type StorageService struct {
 	McsApiKey      string `json:"mcs_api_key"`
 	McsAccessToken string `json:"mcs_access_token"`
 	NetWork        string `json:"net_work"`
 	BucketName     string `json:"bucket_name"`
+	mcsClient      *user.McsClient
 }
 
 func NewStorageService() *StorageService {
-	once.Do(func() {
+	storageOnce.Do(func() {
 		storage = &StorageService{
 			McsApiKey:      os.Getenv("MCS_API_KEY"),
 			McsAccessToken: os.Getenv("MCS_ACCESS_TOKEN"),
@@ -28,22 +29,18 @@ func NewStorageService() *StorageService {
 			BucketName:     os.Getenv("MCS_BUCKET"),
 		}
 	})
+	mcsClient, err := user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed creating mcsClient, error: %v", err)
+		return nil
+	}
+	storage.mcsClient = mcsClient
 	return storage
 }
 
 func (storage *StorageService) UploadFileToBucket(objectName, filePath string, replace bool) (*bucket.OssFile, error) {
 	logs.GetLogger().Infof("uploading file to bucket, objectName: %s, filePath: %s", objectName, filePath)
-	mcsClient, err := user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed creating mcsClient, error: %v", err)
-		return nil, err
-	}
-	buketClient := bucket.GetBucketClient(*mcsClient)
-
-	//if _, err := buketClient.CreateFolder(storage.BucketName, filepath.Dir(objectName), ""); err != nil {
-	//	logs.GetLogger().Errorf("Failed create folder, error: %v", err)
-	//	return nil, err
-	//}
+	buketClient := bucket.GetBucketClient(*storage.mcsClient)
 
 	file, err := buketClient.GetFile(storage.BucketName, objectName)
 	if err != nil && !strings.Contains(err.Error(), "record not found") {
@@ -69,4 +66,28 @@ func (storage *StorageService) UploadFileToBucket(objectName, filePath string, r
 		return nil, err
 	}
 	return mcsOssFile, nil
+}
+
+func (storage *StorageService) DeleteBucket(bucketName string) error {
+	return bucket.GetBucketClient(*storage.mcsClient).DeleteBucket(bucketName)
+}
+
+func (storage *StorageService) CreateBucket(bucketName string) {
+	_, err := bucket.GetBucketClient(*storage.mcsClient).CreateBucket(bucketName)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed create bucket, error: %v", err)
+		return
+	}
+}
+
+func (storage *StorageService) CreateFolder(folderName string) {
+	_, err := bucket.GetBucketClient(*storage.mcsClient).CreateFolder(storage.BucketName, folderName, "")
+	if err != nil {
+		logs.GetLogger().Errorf("Failed create folder, error: %v", err)
+		return
+	}
+}
+
+func (storage *StorageService) GetGatewayUrl() (*string, error) {
+	return bucket.GetBucketClient(*storage.mcsClient).GetGateway()
 }

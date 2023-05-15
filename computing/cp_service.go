@@ -38,28 +38,33 @@ func ReceiveJob(c *gin.Context) {
 	logs.GetLogger().Infof("Job received: %+v", jobData)
 
 	// TODO: Async Processing the job
-	result := processJob(jobData)
-
-	c.JSON(http.StatusOK, result)
-}
-
-func processJob(jobData models.JobData) interface{} {
-	// Add your job processing logic here
-	logs.GetLogger().Infof("Processing job: %s", jobData.JobSourceURI)
 	jobSourceURI := jobData.JobSourceURI
-	imageName, dockerfilePath := BuildSpaceTask(jobSourceURI)
-
 	spaceName, err := getSpaceName(jobSourceURI)
 	if err != nil {
-		logs.GetLogger().Errorf("Error get space name: %v", err)
-		return ""
+		logs.GetLogger().Errorf("Failed get space name: %v", err)
+		return
 	}
-	url := runContainerToK8s(imageName, dockerfilePath, spaceName)
-	jobData.JobResultURI = url
-	submitJob(&jobData)
 
-	logs.GetLogger().Infof("Running at: %s", url)
-	return nil
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, spaceName, jobSourceURI)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
+		return
+	}
+	logs.GetLogger().Infof("delayTask detail info: %+v", delayTask)
+
+	go func() {
+		result, err := delayTask.Get(180 * time.Second)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
+			return
+		}
+		url := result.(string)
+		jobData.JobResultURI = url
+		submitJob(&jobData)
+		logs.GetLogger().Infof("update Job received: %+v", jobData)
+	}()
+
+	c.JSON(http.StatusOK, "job submitted")
 }
 
 func submitJob(jobData *models.JobData) {
@@ -85,25 +90,40 @@ func submitJob(jobData *models.JobData) {
 		return
 	}
 
-	mcsOssFile, err := NewStorageService().UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
+	storageService := NewStorageService()
+	mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
 		return
 	}
 	mcsFileJson, _ := json.Marshal(mcsOssFile)
 	logs.GetLogger().Printf("Job submitted to IPFS %s", string(mcsFileJson))
-	jobData.JobResultURI = "" + "/ipfs/" + mcsOssFile.PayloadCid
+
+	gatewayUrl, err := storageService.GetGatewayUrl()
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
+		return
+	}
+	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
+}
+
+func DeploySpaceTask(spaceName, jobSourceURI string) string {
+	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
+	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
+	resultUrl := runContainerToK8s(imageName, dockerfilePath, spaceName)
+	logs.GetLogger().Infof("Job: %s, running at: %s", jobSourceURI, resultUrl)
+	return resultUrl
 }
 
 func DeleteSpaceTask(c *gin.Context) {
-	spaceName := c.Param("task_name")
+	spaceName := c.Param("space_name")
 	k8sService := NewK8sService()
 	if err := k8sService.DeleteService(context.TODO(), coreV1.NamespaceDefault, spaceName); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
 
-	if err := k8sService.DeleteDeployment(context.TODO(), coreV1.NamespaceDefault, spaceName); err != nil {
+	if err := k8sService.DeleteDeployment(context.TODO(), coreV1.NamespaceDefault, "cp-worker-"+spaceName); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}

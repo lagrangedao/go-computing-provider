@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/circonus-labs/circonus-gometrics/api/config"
-	"github.com/filswan/go-swan-lib/logs"
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"

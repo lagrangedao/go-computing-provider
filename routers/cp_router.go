@@ -2,7 +2,7 @@ package routers
 
 import (
 	"github.com/gin-gonic/gin"
-	"go-computing-provider/computing"
+	"github.com/lagrangedao/go-computing-provider/computing"
 )
 
 func CPManager(router *gin.RouterGroup) {

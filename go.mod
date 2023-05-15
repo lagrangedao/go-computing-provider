@@ -1,4 +1,4 @@
-module go-computing-provider
+module github.com/lagrangedao/go-computing-provider
 
 go 1.19
 
@@ -6,12 +6,12 @@ require (
 	github.com/circonus-labs/circonus-gometrics v2.3.1+incompatible
 	github.com/docker/docker v23.0.6+incompatible
 	github.com/ethereum/go-ethereum v1.11.6
+	github.com/filswan/go-mcs-sdk v0.0.0-20230509154333-3a8409078688
 	github.com/filswan/go-swan-lib v0.2.139
 	github.com/gin-gonic/gin v1.9.0
 	github.com/google/uuid v1.3.0
 	github.com/itsjamie/gin-cors v0.0.0-20220228161158-ef28d3d2a0a8
 	github.com/joho/godotenv v1.3.0
-	go-mcs-sdk v0.0.1
 	k8s.io/api v0.25.9
 	k8s.io/apimachinery v0.25.9
 	k8s.io/client-go v0.25.9
@@ -78,6 +78,7 @@ require (
 	github.com/multiformats/go-multihash v0.2.1 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/onsi/gomega v1.24.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
@@ -111,5 +112,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
-
-replace go-mcs-sdk => ./extern/go-mcs-sdk

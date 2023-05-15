@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/filswan/go-swan-lib/logs"
 	"github.com/joho/godotenv"
-	"go-computing-provider/computing"
+	"github.com/lagrangedao/go-computing-provider/computing"
 	"io/ioutil"
 	"net/http"
 	"os"

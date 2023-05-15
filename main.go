@@ -4,8 +4,8 @@ import (
 	"github.com/filswan/go-swan-lib/logs"
 	"github.com/gin-gonic/gin"
 	cors "github.com/itsjamie/gin-cors"
-	"go-computing-provider/initializer"
-	"go-computing-provider/routers"
+	"github.com/lagrangedao/go-computing-provider/initializer"
+	"github.com/lagrangedao/go-computing-provider/routers"
 	"strconv"
 	"time"
 )

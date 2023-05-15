@@ -1,9 +1,9 @@
 package computing
 
 import (
-	"github.com/filswan/go-swan-lib/logs"
-	"go-mcs-sdk/mcs/api/bucket"
-	"go-mcs-sdk/mcs/api/user"
+	"github.com/filswan/go-mcs-sdk/mcs/api/bucket"
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/filswan/go-mcs-sdk/mcs/api/user"
 	"os"
 	"strings"
 	"sync"

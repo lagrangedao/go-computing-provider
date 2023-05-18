@@ -6,20 +6,20 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
-	"github.com/lagrangedao/go-computing-provider/models"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/lagrangedao/go-computing-provider/models"
 )
 
-import (
-	//...
-	"encoding/json"
-	//...
-)
+//...
+
+//...
 
 func updateProviderInfo(nodeID string, peerID string, address string) {
 	updateURL := os.Getenv("LAGRANGE_HOST") + "/cp"
@@ -27,7 +27,7 @@ func updateProviderInfo(nodeID string, peerID string, address string) {
 	provider := models.ComputingProvider{
 		Name:         cpName,
 		NodeId:       nodeID,
-		MultiAddress: "/ip4/127.0.0.1/tcp/8085",
+		MultiAddress: "/ip4/38.122.230.140/tcp/11347",
 		Autobid:      1,
 	}
 

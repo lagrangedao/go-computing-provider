@@ -100,6 +100,12 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 			logs.GetLogger().Errorf("Error building Docker image: %v", err)
 			return "", ""
 		}
+
+		if err := dockerService.PushImage(imageName); err != nil {
+			logs.GetLogger().Errorf("Error Docker push image: %v", err)
+			return "", ""
+		}
+
 		return imageName, dockerfilePath
 	} else {
 		log.Printf("Space %s is not found.", spaceName)

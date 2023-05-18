@@ -72,7 +72,7 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("update Job received: %+v", jobData)
 	}()
 
-	c.JSON(http.StatusOK, "job submitted")
+	c.JSON(http.StatusOK, jobData)
 }
 
 func submitJob(jobData *models.JobData) {
@@ -154,7 +154,7 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string, res c
 	k8sService := NewK8sService()
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), coreV1.NamespaceDefault, DeploymentReq{
 		ContainerName: "cp-worker-" + spaceName,
-		ImageName:     "sonic868/" + imageName,
+		ImageName:     imageName,
 		Label:         map[string]string{"app": spaceName},
 		ContainerPort: int32(containerPort),
 		Res:           res,

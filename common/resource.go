@@ -7,7 +7,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    2,
 		},
 		Memory: Specification{
-			Description: "16GiB",
+			Description: "16Gi",
 			Quantity:    16,
 		},
 	},
@@ -17,7 +17,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    8,
 		},
 		Memory: Specification{
-			Description: "32GiB",
+			Description: "32Gi",
 			Quantity:    32,
 		},
 	},
@@ -27,7 +27,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    4,
 		},
 		Memory: Specification{
-			Description: "15GiB",
+			Description: "15Gi",
 			Quantity:    15,
 		},
 		Gpu: Specification{
@@ -41,7 +41,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    8,
 		},
 		Memory: Specification{
-			Description: "30GiB",
+			Description: "30Gi",
 			Quantity:    30,
 		},
 		Gpu: Specification{
@@ -55,7 +55,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    4,
 		},
 		Memory: Specification{
-			Description: "15GiB",
+			Description: "15Gi",
 			Quantity:    15,
 		},
 		Gpu: Specification{
@@ -69,7 +69,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    12,
 		},
 		Memory: Specification{
-			Description: "46GiB",
+			Description: "46Gi",
 			Quantity:    46,
 		},
 		Gpu: Specification{
@@ -83,7 +83,7 @@ var HardwareResource = map[string]Resource{
 			Quantity:    12,
 		},
 		Memory: Specification{
-			Description: "142GiB",
+			Description: "142Gi",
 			Quantity:    142,
 		},
 		Gpu: Specification{

@@ -9,9 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"io"
 	"log"
 	"os"
@@ -21,6 +18,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 )
 
 type DockerService struct {
@@ -160,17 +160,44 @@ func RemoveContainerIfExists(imageName string) error {
 	return nil
 }
 
-func (ds *DockerService) BuildImage(buildPath, spaceName, imageName string) error {
-	tarPath, err := tarDir(buildPath, spaceName)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed tar space, error: %+v", err)
-		return err
-	}
-	dockerBuildContext, err := os.Open(tarPath)
-	defer dockerBuildContext.Close()
+func (ds *DockerService) BuildImage(buildPath, imageName string) error {
+	// Create a buffer
+	buf := new(bytes.Buffer)
+	tw := tar.NewWriter(buf)
+	defer tw.Close()
 
-	buildResponse, err := ds.c.ImageBuild(context.Background(), dockerBuildContext, types.ImageBuildOptions{
-		Context: tar.NewReader(dockerBuildContext),
+	filepath.Walk(buildPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(info, info.Name())
+		if err != nil {
+			return err
+		}
+		relPath, err := filepath.Rel(buildPath, path)
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+			if _, err := io.Copy(tw, file); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+
+	dockerFileTarReader := bytes.NewReader(buf.Bytes())
+	buildResponse, err := ds.c.ImageBuild(context.Background(), dockerFileTarReader, types.ImageBuildOptions{
+		Context: dockerFileTarReader,
 		Tags:    []string{imageName},
 	})
 	if err != nil {

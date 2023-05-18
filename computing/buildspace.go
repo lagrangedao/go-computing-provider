@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"io"
 	"log"
 	"net/http"
@@ -13,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 )
 
 func getSpaceName(apiURL string) (string, error) {
@@ -95,7 +96,7 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 		log.Printf("Image path: %s", imagePath)
 
 		dockerService := NewDockerService()
-		if err := dockerService.BuildImage(imagePath, spaceName, imageName); err != nil {
+		if err := dockerService.BuildImage(imagePath, imageName); err != nil {
 			logs.GetLogger().Errorf("Error building Docker image: %v", err)
 			return "", ""
 		}

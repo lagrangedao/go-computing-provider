@@ -3,20 +3,19 @@ package computing
 import (
 	"context"
 	"flag"
-	"fmt"
-	"github.com/circonus-labs/circonus-gometrics/api/config"
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"net"
+	"path/filepath"
+
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
+
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
-	"net"
-	"path/filepath"
-	"strconv"
 )
 
 type K8sService struct {
@@ -76,6 +75,18 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: deploy.ContainerPort,
 						}},
+						Resources: coreV1.ResourceRequirements{
+							Limits: coreV1.ResourceList{
+								coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+							},
+							Requests: coreV1.ResourceList{
+								coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+							},
+						},
 					}},
 				},
 			},
@@ -132,84 +143,4 @@ func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deployment
 
 func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
 	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
-}
-
-type DeploymentReq struct {
-	ContainerName string
-	ImageName     string
-	Label         map[string]string
-	ContainerPort int32
-}
-
-func runContainerToK8s(imageName, dockerfilePath string, spaceName string) string {
-	exposedPort, err := ExtractExposedPort(dockerfilePath)
-	if err != nil {
-		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
-		return ""
-	}
-
-	containerPort, err := strconv.ParseInt(exposedPort, 10, 64)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed to convert exposed port: %v", err)
-		return ""
-	}
-
-	k8sService := NewK8sService()
-	createDeployment, err := k8sService.CreateDeployment(context.TODO(), coreV1.NamespaceDefault, DeploymentReq{
-		ContainerName: "cp-worker-" + spaceName,
-		ImageName:     "docker.io/" + imageName,
-		Label:         map[string]string{"app": spaceName},
-		ContainerPort: int32(containerPort),
-	})
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return ""
-	}
-	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
-
-	service := &coreV1.Service{
-		TypeMeta: metaV1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metaV1.ObjectMeta{
-			Name: spaceName,
-		},
-		Spec: coreV1.ServiceSpec{
-			Type: coreV1.ServiceTypeNodePort,
-			Ports: []coreV1.ServicePort{
-				{
-					Name:       "http",
-					Port:       int32(containerPort),
-					TargetPort: intstr.FromInt(int(containerPort)),
-					Protocol:   coreV1.ProtocolTCP,
-				},
-			},
-			Selector: map[string]string{
-				"app": spaceName,
-			},
-		},
-	}
-	createService, err := k8sService.CreateService(context.TODO(), coreV1.NamespaceDefault, service, metaV1.CreateOptions{})
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return ""
-	}
-	logs.GetLogger().Infof("Created service %s", createService.GetObjectMeta().GetName())
-
-	service, err = k8sService.GetServiceByName(context.TODO(), coreV1.NamespaceDefault, spaceName, metaV1.GetOptions{})
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return ""
-	}
-	port := service.Spec.Ports[0].NodePort
-	fmt.Printf("Service is exposed at %s:%d\n", config.Host, port)
-
-	//hostIp, err := k8sService.GetNodeList()
-	//if err != nil {
-	//	logs.GetLogger().Error(err)
-	//	return ""
-	//}
-	url := "http://127.0.0.1" + ":" + strconv.Itoa(int(port))
-	return url
 }

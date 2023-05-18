@@ -1,14 +1,16 @@
 package computing
 
 import (
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
-	"github.com/gocelery/gocelery"
-	"github.com/gomodule/redigo/redis"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/gocelery/gocelery"
+	"github.com/gomodule/redigo/redis"
 )
 
+var redisPool *redis.Pool
 var celeryService *CeleryService
 var celeryOnce sync.Once
 
@@ -17,7 +19,7 @@ type CeleryService struct {
 }
 
 func newRedisPool(url string, password string) *redis.Pool {
-	return &redis.Pool{
+	redisPool = &redis.Pool{
 		MaxIdle:     5,                 // maximum number of idle connections in the pool
 		MaxActive:   0,                 // maximum number of connections allocated by the pool at a given time
 		IdleTimeout: 240 * time.Second, // close connections after remaining idle for this duration
@@ -39,6 +41,7 @@ func newRedisPool(url string, password string) *redis.Pool {
 			return err
 		},
 	}
+	return redisPool
 }
 
 func NewCeleryService() *CeleryService {

@@ -5,12 +5,14 @@ import (
 	"flag"
 	"net"
 	"path/filepath"
+	"sync"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -18,31 +20,38 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+var k8sOnce sync.Once
+var clientset *kubernetes.Clientset
+
 type K8sService struct {
 	k8sClient *kubernetes.Clientset
 }
 
 func NewK8sService() *K8sService {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		// 如果不在集群内，则尝试使用kubeconfig文件进行认证
-		var kubeconfig *string
-		if home := homedir.HomeDir(); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		}
-		flag.Parse()
-		config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	k8sOnce.Do(func() {
+		config, err := rest.InClusterConfig()
 		if err != nil {
-			panic(err.Error())
+			// 如果不在集群内，则尝试使用kubeconfig文件进行认证
+			var kubeconfig *string
+			if home := homedir.HomeDir(); home != "" {
+				kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+			} else {
+				kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+			}
+			flag.Parse()
+			config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
+			if err != nil {
+				logs.GetLogger().Errorf("Failed create k8s config, error: %v", err)
+				return
+			}
 		}
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed create k8s clientset, error: %v", err)
-		return nil
-	}
+		clientset, err = kubernetes.NewForConfig(config)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed create k8s clientset, error: %v", err)
+			return
+		}
+	})
+
 	return &K8sService{
 		k8sClient: clientset,
 	}

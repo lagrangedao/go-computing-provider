@@ -91,6 +91,20 @@ var HardwareResource = map[string]Resource{
 			Quantity:    1,
 		},
 	},
+	"7": {
+		Cpu: Specification{
+			Description: "0 vCPU",
+			Quantity:    0,
+		},
+		Memory: Specification{
+			Description: "0Gi",
+			Quantity:    0,
+		},
+		Gpu: Specification{
+			Description: "Nvidia A100 40GB",
+			Quantity:    0,
+		},
+	},
 }
 
 type Resource struct {

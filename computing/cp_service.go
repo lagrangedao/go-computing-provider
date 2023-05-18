@@ -245,6 +245,7 @@ func watchContainerRunningTime(key, val string, time int) {
 			switch n := psc.Receive().(type) {
 			case redis.Message:
 				if n.Channel == "__keyevent@0__:expired" && string(n.Data) == key {
+					logs.GetLogger().Infof("The [%s] job has reached its runtime and will stop running.", val)
 					deleteJob(val)
 				}
 			case redis.Subscription:

@@ -126,6 +126,7 @@ func DeploySpaceTask(spaceName, jobSourceURI, hardware string, duration int) str
 		return ""
 	}
 
+	spaceName = strings.ToLower(spaceName)
 	resultUrl := runContainerToK8s(imageName, dockerfilePath, spaceName, resource, duration)
 	logs.GetLogger().Infof("Job: %s, running at: %s", jobSourceURI, resultUrl)
 	return resultUrl
@@ -154,7 +155,7 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string, res c
 
 	k8sService := NewK8sService()
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), coreV1.NamespaceDefault, DeploymentReq{
-		ContainerName: "cp-worker-" + strings.ToLower(spaceName),
+		ContainerName: "cp-worker-" + spaceName,
 		ImageName:     imageName,
 		Label:         map[string]string{"app": spaceName},
 		ContainerPort: int32(containerPort),
@@ -217,6 +218,7 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string, res c
 
 func DeleteSpaceTask(c *gin.Context) {
 	spaceName := c.Param("space_name")
+	spaceName = strings.ToLower(spaceName)
 	deleteJob(spaceName)
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -153,7 +154,7 @@ func runContainerToK8s(imageName, dockerfilePath string, spaceName string, res c
 
 	k8sService := NewK8sService()
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), coreV1.NamespaceDefault, DeploymentReq{
-		ContainerName: "cp-worker-" + spaceName,
+		ContainerName: "cp-worker-" + strings.ToLower(spaceName),
 		ImageName:     imageName,
 		Label:         map[string]string{"app": spaceName},
 		ContainerPort: int32(containerPort),

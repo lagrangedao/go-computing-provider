@@ -21,10 +21,10 @@ cd go-computing-provider
 go mod tidy
 ```
 
-3. Create a .env file by copying the .env_sample file and updating the values.
+3. Create a config.toml file by copying the config.toml.sample file and updating the values.
 
 ```shell
-cp .env_sample .env
+cp config.toml.sample config.toml
 ```
 4. start a redis stack
 

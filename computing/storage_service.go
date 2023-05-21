@@ -4,7 +4,7 @@ import (
 	"github.com/filswan/go-mcs-sdk/mcs/api/bucket"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/filswan/go-mcs-sdk/mcs/api/user"
-	"os"
+	"github.com/lagrangedao/go-computing-provider/conf"
 	"strings"
 	"sync"
 )
@@ -23,10 +23,10 @@ type StorageService struct {
 func NewStorageService() *StorageService {
 	storageOnce.Do(func() {
 		storage = &StorageService{
-			McsApiKey:      os.Getenv("MCS_API_KEY"),
-			McsAccessToken: os.Getenv("MCS_ACCESS_TOKEN"),
-			NetWork:        os.Getenv("MSC_NETWORK"),
-			BucketName:     os.Getenv("MCS_BUCKET"),
+			McsApiKey:      conf.GetConfig().Mcs.ApiKey,
+			McsAccessToken: conf.GetConfig().Mcs.AccessToken,
+			NetWork:        conf.GetConfig().Mcs.Network,
+			BucketName:     conf.GetConfig().Mcs.Bucket,
 		}
 	})
 	mcsClient, err := user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)

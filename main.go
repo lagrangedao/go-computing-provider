@@ -1,13 +1,15 @@
 package main
 
 import (
+	"strconv"
+	"time"
+
 	"github.com/filswan/go-swan-lib/logs"
 	"github.com/gin-gonic/gin"
 	cors "github.com/itsjamie/gin-cors"
+	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/initializer"
 	"github.com/lagrangedao/go-computing-provider/routers"
-	"strconv"
-	"time"
 )
 
 func main() {
@@ -26,7 +28,7 @@ func main() {
 
 	v1 := r.Group("/api/v1")
 	routers.CPManager(v1.Group("/computing"))
-	err := r.Run(":" + strconv.Itoa(8085))
+	err := r.Run(":" + strconv.Itoa(conf.GetConfig().API.Port))
 	if err != nil {
 		logs.GetLogger().Fatal(err)
 	}

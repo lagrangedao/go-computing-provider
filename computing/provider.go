@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/models"
 )
 
@@ -22,12 +23,12 @@ import (
 //...
 
 func updateProviderInfo(nodeID string, peerID string, address string) {
-	updateURL := os.Getenv("LAGRANGE_HOST") + "/cp"
+	updateURL := conf.GetConfig().LAD.ServerUrl + "/cp"
 	cpName, _ := os.Hostname()
 	provider := models.ComputingProvider{
 		Name:         cpName,
 		NodeId:       nodeID,
-		MultiAddress: "/ip4/38.122.230.140/tcp/11347",
+		MultiAddress: conf.GetConfig().API.MultiAddress,
 		Autobid:      1,
 	}
 
@@ -46,7 +47,7 @@ func updateProviderInfo(nodeID string, peerID string, address string) {
 
 	// Set the content type and API token in the request header
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("LAGRANGE_API_TOKEN"))
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
 
 	resp, err := client.Do(req)
 	if err != nil {

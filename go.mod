@@ -3,6 +3,7 @@ module github.com/lagrangedao/go-computing-provider
 go 1.19
 
 require (
+	github.com/BurntSushi/toml v1.1.0
 	github.com/circonus-labs/circonus-gometrics v2.3.1+incompatible
 	github.com/docker/docker v23.0.6+incompatible
 	github.com/ethereum/go-ethereum v1.11.6

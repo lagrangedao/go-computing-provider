@@ -12,3 +12,8 @@ const BiddingCompleted string = "completed"
 const BiddingCancelled string = "cancelled"
 
 const TASK_DEPLOY string = "worker.deploy"
+
+const K8S_NAMESPACE_NAME_PREFIX = "ns-"
+const K8S_CONTAINER_NAME_PREFIX = "worker-"
+const K8S_SERVICE_NAME_PREFIX = "svc-"
+const K8S_DEPLOY_NAME_PREFIX = "deploy-"

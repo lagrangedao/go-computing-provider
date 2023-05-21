@@ -2,15 +2,17 @@ package initializer
 
 import (
 	"fmt"
-	"github.com/filswan/go-swan-lib/logs"
-	"github.com/joho/godotenv"
-	"github.com/lagrangedao/go-computing-provider/computing"
-	"github.com/lagrangedao/go-computing-provider/constants"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/filswan/go-swan-lib/logs"
+	"github.com/joho/godotenv"
+	"github.com/lagrangedao/go-computing-provider/computing"
+	"github.com/lagrangedao/go-computing-provider/conf"
+	"github.com/lagrangedao/go-computing-provider/constants"
 )
 
 func LoadEnv() {
@@ -24,7 +26,7 @@ func LoadEnv() {
 
 func sendHeartbeat(nodeId string) {
 	// Replace the following URL with your Flask application's heartbeat endpoint URL
-	heartbeatURL := os.Getenv("LAGRANGE_HOST") + "/cp/heartbeat"
+	heartbeatURL := conf.GetConfig().LAD.ServerUrl + "/cp/heartbeat"
 	payload := strings.NewReader(fmt.Sprintf(`{
     "node_id": "%s",
     "status": "Active"
@@ -37,7 +39,7 @@ func sendHeartbeat(nodeId string) {
 		return
 	}
 	// Set the API token in the request header (replace "your_api_token" with the actual token)
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("LAGRANGE_API_TOKEN"))
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
@@ -59,7 +61,9 @@ func sendHeartbeats(nodeId string) {
 	}
 }
 func ProjectInit() {
-	LoadEnv()
+	if err := conf.InitConfig(); err != nil {
+		logs.GetLogger().Fatal(err)
+	}
 	nodeID := computing.InitComputingProvider()
 	// Start sending heartbeats
 	go sendHeartbeats(nodeID)

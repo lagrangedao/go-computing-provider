@@ -1,0 +1,23 @@
+[API]
+Port = 8085
+MultiAddress = "/ip4/127.0.0.1/tcp/8085"
+
+OPENAI_API_KEY = ""
+RedisUrl = "redis://127.0.0.1:6379"
+RedisPassword = ""
+
+[LAD]
+ServerUrl = "https://api.lagrangedao.org"
+AccessToken = ""
+
+[Mcs]
+ApiKey = ""
+AccessToken = ""
+Bucket = ""
+Network = "polygon.mainnet"
+FileCachePath = ""
+
+[Registry]
+ServerAddress = ""
+UserName = ""
+Password = ""

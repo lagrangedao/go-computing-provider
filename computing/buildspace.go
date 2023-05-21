@@ -16,21 +16,22 @@ import (
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 )
 
-func getSpaceName(apiURL string) (string, error) {
+func getSpaceName(apiURL string) (string, string, error) {
 	parsedURL, err := url.Parse(apiURL)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	pathSegments := parsedURL.Path[1:]
 	segments := strings.Split(pathSegments, "/")
 
 	if len(segments) < 2 || segments[0] != "spaces" {
-		return "", errors.New("invalid URL format")
+		return "", "", errors.New("invalid URL format")
 	}
 
-	spaceName := segments[1]
-	return spaceName, nil
+	creator := segments[1]
+	spaceName := segments[2]
+	return creator, spaceName, nil
 }
 
 func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
@@ -90,7 +91,7 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 			log.Printf("Download %s successfully.", spaceName)
 		}
 
-		imageName := "lagrange/" + spaceName
+		imageName := "sonic868/" + spaceName
 		imageName = strings.ToLower(imageName)
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
 		dockerfilePath := filepath.Join(imagePath, "Dockerfile")

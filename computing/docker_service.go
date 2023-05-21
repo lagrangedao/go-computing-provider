@@ -16,8 +16,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
+
+	"github.com/lagrangedao/go-computing-provider/conf"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -219,9 +220,9 @@ func (ds *DockerService) PushImage(imagesName string) error {
 	defer cancel()
 
 	var authConfig = types.AuthConfig{
-		Username:      os.Getenv("OUR_DOCKER_USERNAME"),
-		Password:      os.Getenv("OUR_DOCKER_PASSWORD"),
-		ServerAddress: "https://hub.docker.com/",
+		ServerAddress: conf.GetConfig().Registry.ServerAddress,
+		Username:      conf.GetConfig().Registry.UserName,
+		Password:      conf.GetConfig().Registry.Password,
 	}
 	authConfigBytes, _ := json.Marshal(authConfig)
 	authConfigEncoded := base64.URLEncoding.EncodeToString(authConfigBytes)
@@ -255,49 +256,4 @@ func printOut(rd io.Reader) error {
 		return err
 	}
 	return nil
-}
-
-func tarDir(buildPath, spaceName string) (string, error) {
-	output := fmt.Sprintf("/tmp/build/%s.tar", spaceName)
-	oldMask := syscall.Umask(0)
-	defer syscall.Umask(oldMask)
-
-	file, err := os.Create(output)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	tarWriter := tar.NewWriter(file)
-	defer tarWriter.Close()
-	filepath.Walk(buildPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		header, err := tar.FileInfoHeader(info, info.Name())
-		if err != nil {
-			return err
-		}
-		relPath, err := filepath.Rel(buildPath, path)
-		if err != nil {
-			return err
-		}
-		header.Name = relPath
-		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
-		}
-		if !info.IsDir() {
-			file, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer file.Close()
-			if _, err := io.Copy(tarWriter, file); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	fmt.Println("Archive created successfully!")
-	return output, nil
 }

@@ -1,9 +1,10 @@
 package computing
 
 import (
-	"os"
 	"sync"
 	"time"
+
+	"github.com/lagrangedao/go-computing-provider/conf"
 
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/gocelery/gocelery"
@@ -47,9 +48,7 @@ func newRedisPool(url string, password string) *redis.Pool {
 func NewCeleryService() *CeleryService {
 	celeryOnce.Do(
 		func() {
-			redisUrl := os.Getenv("REDIS_URL")
-			redisPwd := os.Getenv("REDIS_PASSWORD")
-			redisPool := newRedisPool(redisUrl, redisPwd)
+			redisPool := newRedisPool(conf.GetConfig().API.RedisUrl, conf.GetConfig().API.RedisPassword)
 			celeryClient, err := gocelery.NewCeleryClient(
 				gocelery.NewRedisBroker(redisPool),
 				gocelery.NewRedisBackend(redisPool),

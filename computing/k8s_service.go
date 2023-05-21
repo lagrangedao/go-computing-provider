@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 
@@ -64,7 +62,8 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metaV1.ObjectMeta{
-			Name: deploy.ContainerName,
+			Name:      deploy.DeployName,
+			Namespace: nameSpace,
 		},
 		Spec: appV1.DeploymentSpec{
 			Selector: &metaV1.LabelSelector{
@@ -73,7 +72,8 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 
 			Template: coreV1.PodTemplateSpec{
 				ObjectMeta: metaV1.ObjectMeta{
-					Labels: deploy.Label,
+					Labels:    deploy.Label,
+					Namespace: nameSpace,
 				},
 
 				Spec: coreV1.PodSpec{
@@ -84,18 +84,18 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: deploy.ContainerPort,
 						}},
-						Resources: coreV1.ResourceRequirements{
-							Limits: coreV1.ResourceList{
-								coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
-								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-							},
-							Requests: coreV1.ResourceList{
-								coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
-								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-							},
-						},
+						//Resources: coreV1.ResourceRequirements{
+						//	Limits: coreV1.ResourceList{
+						//		coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+						//		coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+						//		coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+						//	},
+						//	Requests: coreV1.ResourceList{
+						//		coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+						//		coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+						//		coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+						//	},
+						//},
 					}},
 				},
 			},
@@ -152,4 +152,12 @@ func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deployment
 
 func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
 	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
+}
+
+func (s *K8sService) CreateNameSpace(ctx context.Context, nameSpace *coreV1.Namespace, opts metaV1.CreateOptions) (result *coreV1.Namespace, err error) {
+	return s.k8sClient.CoreV1().Namespaces().Create(ctx, nameSpace, opts)
+}
+
+func (s *K8sService) GetNameSpace(ctx context.Context, nameSpace string, opts metaV1.GetOptions) (result *coreV1.Namespace, err error) {
+	return s.k8sClient.CoreV1().Namespaces().Get(ctx, nameSpace, opts)
 }

@@ -201,7 +201,6 @@ func (ds *DockerService) BuildImage(buildPath, imageName string) error {
 		Tags:    []string{imageName},
 	})
 	if err != nil {
-		fmt.Printf("%s", err.Error())
 		return err
 	}
 	defer buildResponse.Body.Close()

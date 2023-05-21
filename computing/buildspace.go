@@ -91,6 +91,7 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 		}
 
 		imageName := "lagrange/" + spaceName
+		imageName = strings.ToLower(imageName)
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
 		dockerfilePath := filepath.Join(imagePath, "Dockerfile")
 		log.Printf("Image path: %s", imagePath)

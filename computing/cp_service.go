@@ -185,6 +185,13 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		}
 	}
 
+	getService, err := k8sService.GetServiceByName(context.TODO(), nameSpace, constants.K8S_SERVICE_NAME_PREFIX+spaceName, metaV1.GetOptions{})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return ""
+	}
+	releasePort(int(getService.Spec.Ports[0].NodePort))
+
 	// first delete k8s resources
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
 	k8sService.DeleteService(context.TODO(), nameSpace, serviceName)
@@ -239,12 +246,6 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		return ""
 	}
 	logs.GetLogger().Infof("Created service %s", createService.GetObjectMeta().GetName())
-
-	service, err = k8sService.GetServiceByName(context.TODO(), nameSpace, constants.K8S_SERVICE_NAME_PREFIX+spaceName, metaV1.GetOptions{})
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return ""
-	}
 
 	url := fmt.Sprintf("http://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
 	return url

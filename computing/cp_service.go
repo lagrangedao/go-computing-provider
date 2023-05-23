@@ -61,17 +61,15 @@ func ReceiveJob(c *gin.Context) {
 	}
 	logs.GetLogger().Infof("delayTask detail info: %+v", delayTask)
 
-	go func() {
-		result, err := delayTask.Get(180 * time.Second)
-		if err != nil {
-			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
-			return
-		}
-		url := result.(string)
-		jobData.JobResultURI = url
-		submitJob(&jobData)
-		logs.GetLogger().Infof("update Job received: %+v", jobData)
-	}()
+	result, err := delayTask.Get(180 * time.Second)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
+		return
+	}
+	url := result.(string)
+	jobData.JobResultURI = url
+	submitJob(&jobData)
+	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
 	c.JSON(http.StatusOK, jobData)
 }
@@ -177,6 +175,13 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 			return ""
 		}
 	}
+
+	// first delete k8s resources
+	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
+	k8sService.DeleteService(context.TODO(), nameSpace, serviceName)
+
+	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
+	k8sService.DeleteDeployment(context.TODO(), nameSpace, deployName)
 
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), nameSpace, DeploymentReq{
 		NameSpace:     nameSpace,

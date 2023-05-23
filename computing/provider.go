@@ -18,9 +18,10 @@ import (
 	"github.com/lagrangedao/go-computing-provider/models"
 )
 
-//...
-
-//...
+func Reconnect(nodeID string) string {
+	updateProviderInfo(nodeID, "", "")
+	return nodeID
+}
 
 func updateProviderInfo(nodeID string, peerID string, address string) {
 	updateURL := conf.GetConfig().LAD.ServerUrl + "/cp"

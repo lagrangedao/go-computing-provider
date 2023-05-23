@@ -1,12 +1,13 @@
 package computing
 
 import (
+	"strings"
+	"sync"
+
 	"github.com/filswan/go-mcs-sdk/mcs/api/bucket"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/filswan/go-mcs-sdk/mcs/api/user"
 	"github.com/lagrangedao/go-computing-provider/conf"
-	"strings"
-	"sync"
 )
 
 var storage *StorageService
@@ -23,10 +24,10 @@ type StorageService struct {
 func NewStorageService() *StorageService {
 	storageOnce.Do(func() {
 		storage = &StorageService{
-			McsApiKey:      conf.GetConfig().Mcs.ApiKey,
-			McsAccessToken: conf.GetConfig().Mcs.AccessToken,
-			NetWork:        conf.GetConfig().Mcs.Network,
-			BucketName:     conf.GetConfig().Mcs.Bucket,
+			McsApiKey:      conf.GetConfig().MCS.ApiKey,
+			McsAccessToken: conf.GetConfig().MCS.AccessToken,
+			NetWork:        conf.GetConfig().MCS.Network,
+			BucketName:     conf.GetConfig().MCS.Bucket,
 		}
 	})
 	mcsClient, err := user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)

@@ -14,15 +14,16 @@ var config *ComputeNode
 type ComputeNode struct {
 	API      API
 	LAD      LAD
-	Mcs      Mcs
+	MCS      MCS
 	Registry Registry
 }
 
 type API struct {
-	Port          int
-	MultiAddress  string
-	RedisUrl      string
-	RedisPassword string
+	Port            int
+	MultiAddress    string
+	RedisUrl        string
+	RedisPassword   string
+	PublicNetworkIp string
 }
 
 type LAD struct {
@@ -30,7 +31,7 @@ type LAD struct {
 	AccessToken string
 }
 
-type Mcs struct {
+type MCS struct {
 	ApiKey        string
 	AccessToken   string
 	Bucket        string

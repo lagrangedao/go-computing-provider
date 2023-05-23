@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/BurntSushi/toml v1.1.0
-	github.com/circonus-labs/circonus-gometrics v2.3.1+incompatible
 	github.com/docker/docker v23.0.6+incompatible
 	github.com/ethereum/go-ethereum v1.11.6
 	github.com/filswan/go-mcs-sdk v0.0.0-20230509154333-3a8409078688
@@ -14,7 +13,6 @@ require (
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/itsjamie/gin-cors v0.0.0-20220228161158-ef28d3d2a0a8
-	github.com/joho/godotenv v1.3.0
 	k8s.io/api v0.25.9
 	k8s.io/apimachinery v0.25.9
 	k8s.io/client-go v0.25.9

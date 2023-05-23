@@ -4,25 +4,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/filswan/go-swan-lib/logs"
-	"github.com/joho/godotenv"
 	"github.com/lagrangedao/go-computing-provider/computing"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
 )
-
-func LoadEnv() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		logs.GetLogger().Error(err)
-	}
-
-	logs.GetLogger().Info("name: ", os.Getenv("MCS_BUCKET"))
-}
 
 func sendHeartbeat(nodeId string) {
 	// Replace the following URL with your Flask application's heartbeat endpoint URL
@@ -43,7 +32,8 @@ func sendHeartbeat(nodeId string) {
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		logs.GetLogger().Errorf("Error sending heartbeat: %v", err)
+		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the LAD server: %v", err)
+		computing.Reconnect(nodeId)
 	} else {
 		body, err := ioutil.ReadAll(resp.Body)
 		logs.GetLogger().Infof("Heartbeat sent. Status code: %d\n %s", resp.StatusCode, string(body))

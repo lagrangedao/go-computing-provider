@@ -17,3 +17,8 @@ const K8S_NAMESPACE_NAME_PREFIX = "ns-"
 const K8S_CONTAINER_NAME_PREFIX = "worker-"
 const K8S_SERVICE_NAME_PREFIX = "svc-"
 const K8S_DEPLOY_NAME_PREFIX = "deploy-"
+
+const REDIS_PORT_PREFIX = "port:"
+
+const MIN_PORT = 32750
+const MAX_PORT = 32755

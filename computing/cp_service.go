@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/lagrangedao/go-computing-provider/conf"
 
-	"github.com/circonus-labs/circonus-gometrics/api/config"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
@@ -54,20 +54,29 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, jobData.Duration)
+	port, err := generateRandomPort()
+	if err != nil {
+		logs.GetLogger().Errorf("Failed generate random port: %v", err)
+		return
+	}
+
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, jobData.Duration, port)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
 	}
 	logs.GetLogger().Infof("delayTask detail info: %+v", delayTask)
 
-	result, err := delayTask.Get(180 * time.Second)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
-		return
-	}
-	url := result.(string)
-	jobData.JobResultURI = url
+	go func() {
+		result, err := delayTask.Get(180 * time.Second)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
+			return
+		}
+		logs.GetLogger().Infof("service running successfully, job_result_url: %s", result.(string))
+	}()
+
+	jobData.JobResultURI = fmt.Sprintf("https://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
 	submitJob(&jobData)
 	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
@@ -79,7 +88,7 @@ func submitJob(jobData *models.JobData) {
 	oldMask := syscall.Umask(0)
 	defer syscall.Umask(oldMask)
 
-	fileCachePath := conf.GetConfig().Mcs.FileCachePath
+	fileCachePath := conf.GetConfig().MCS.FileCachePath
 	folderPath := "jobs"
 	jobDetailFile := filepath.Join(folderPath, uuid.NewString()+".json")
 	os.MkdirAll(filepath.Join(fileCachePath, folderPath), os.ModePerm)
@@ -114,7 +123,7 @@ func submitJob(jobData *models.JobData) {
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration int) string {
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration, port int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
 
@@ -126,7 +135,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration
 
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
-	resultUrl := runContainerToK8s(creator, spaceName, imageName, dockerfilePath, resource, duration)
+	resultUrl := runContainerToK8s(creator, spaceName, imageName, dockerfilePath, resource, duration, port)
 	logs.GetLogger().Infof("Job: %s, running at: %s", jobSourceURI, resultUrl)
 	return resultUrl
 }
@@ -141,7 +150,7 @@ type DeploymentReq struct {
 	Res           common.Resource
 }
 
-func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) string {
+func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration, port int) string {
 	exposedPort, err := ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
@@ -197,7 +206,7 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		return ""
 	}
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
-	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), nameSpace, spaceName, duration)
+	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), nameSpace, spaceName, duration, port)
 
 	service := &coreV1.Service{
 		TypeMeta: metaV1.TypeMeta{
@@ -216,6 +225,7 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 					Port:       int32(containerPort),
 					TargetPort: intstr.FromInt(int(containerPort)),
 					Protocol:   coreV1.ProtocolTCP,
+					NodePort:   int32(port),
 				},
 			},
 			Selector: map[string]string{
@@ -235,55 +245,38 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		logs.GetLogger().Error(err)
 		return ""
 	}
-	port := service.Spec.Ports[0].NodePort
-	fmt.Printf("Service is exposed at %s:%d\n", config.Host, port)
 
-	//hostIp, err := k8sService.GetNodeList()
-	//if err != nil {
-	//	logs.GetLogger().Error(err)
-	//	return ""
-	//}
-	url := "http://127.0.0.1" + ":" + strconv.Itoa(int(port))
-
+	url := fmt.Sprintf("http://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
 	return url
 }
 
-func DeleteSpaceTask(c *gin.Context) {
-	spaceName := c.Param("space_name")
-	spaceName = strings.ToLower(spaceName)
-	var creatorWallet struct {
-		UserAddr string `json:"user_addr"`
-	}
-	err := c.ShouldBindJSON(&creatorWallet)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, common.CreateErrorResponse("400", "required user address"))
-	}
-
-	creator := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet.UserAddr)
-	deleteJob(creator, spaceName)
-}
-
-func deleteJob(namespace, spaceName string) {
+func deleteJob(namespace, spaceName string, port int) {
 	k8sService := NewK8sService()
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
 	if err := k8sService.DeleteService(context.TODO(), namespace, serviceName); err != nil {
-		logs.GetLogger().Error(err)
+		logs.GetLogger().Errorf("Failed delete service, serviceName: %s, error: %+v", serviceName, err)
 		return
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", serviceName)
 
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
 	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil {
-		logs.GetLogger().Error(err)
+		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
 		return
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", deployName)
+
+	if err := releasePort(port); err != nil {
+		logs.GetLogger().Errorf("Failed release port, port: %d, error: %+v", port, err)
+	}
+	logs.GetLogger().Infof("release port finished, port: %d", port)
 }
 
-func watchContainerRunningTime(key, namespace, spaceName string, time int) {
+func watchContainerRunningTime(key, namespace, spaceName string, time, port int) {
 	fields := map[string]string{
 		"k8s_namespace": namespace,
 		"space_name":    spaceName,
+		"port":          strconv.Itoa(port),
 	}
 	args := []interface{}{key}
 	for key, val := range fields {
@@ -311,7 +304,7 @@ func watchContainerRunningTime(key, namespace, spaceName string, time int) {
 			case redis.Message:
 				if n.Channel == "__keyevent@0__:expired" && string(n.Data) == key {
 					logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
-					deleteJob(namespace, spaceName)
+					deleteJob(namespace, spaceName, port)
 				}
 			case redis.Subscription:
 				logs.GetLogger().Infof("Subscribe %s", n.Channel)
@@ -320,4 +313,42 @@ func watchContainerRunningTime(key, namespace, spaceName string, time int) {
 			}
 		}
 	}()
+}
+
+func generateRandomPort() (int, error) {
+	rand.Seed(time.Now().UnixNano())
+	var total int
+	for {
+		port := rand.Intn(constants.MAX_PORT-constants.MIN_PORT+1) + constants.MIN_PORT
+		available, err := portIsAvailable(port)
+		if err != nil {
+			return 0, err
+		}
+		if available {
+			return port, nil
+		}
+		total++
+		if total >= 8 {
+			return 0, fmt.Errorf("not enough available IP to allocate")
+		}
+	}
+}
+
+// Check if a port is available
+func portIsAvailable(port int) (bool, error) {
+	//  if it returns 1, it means the key already exists
+	result, err := redisPool.Get().Do("SETNX", constants.REDIS_PORT_PREFIX+strconv.Itoa(port), "is_used")
+	if err != nil {
+		return false, err
+	}
+	exist := result.(int64)
+	if exist == 1 {
+		return true, nil
+	}
+	return false, nil
+}
+
+func releasePort(port int) error {
+	_, err := redisPool.Get().Do("DEL", constants.REDIS_PORT_PREFIX+strconv.Itoa(port))
+	return err
 }

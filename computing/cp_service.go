@@ -186,11 +186,9 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 	}
 
 	getService, err := k8sService.GetServiceByName(context.TODO(), nameSpace, constants.K8S_SERVICE_NAME_PREFIX+spaceName, metaV1.GetOptions{})
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return ""
+	if !errors.IsNotFound(err) {
+		releasePort(int(getService.Spec.Ports[0].NodePort))
 	}
-	releasePort(int(getService.Spec.Ports[0].NodePort))
 
 	// first delete k8s resources
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName

@@ -149,3 +149,12 @@ func downloadFile(filepath string, url string) error {
 
 	return nil
 }
+
+var portDomainMap = map[int]string{
+	32750: "a.meta.crosschain.computer",
+	32751: "b.meta.crosschain.computer",
+	32752: "c.meta.crosschain.computer",
+	32753: "d.meta.crosschain.computer",
+	32754: "e.meta.crosschain.computer",
+	32755: "f.meta.crosschain.computer",
+}

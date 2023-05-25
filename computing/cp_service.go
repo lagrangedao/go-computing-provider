@@ -76,9 +76,12 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("service running successfully, job_result_url: %s", result.(string))
 	}()
 
-	jobData.JobResultURI = fmt.Sprintf("https://hello.%s", conf.GetConfig().API.PublicNetworkIp)
-	submitJob(&jobData)
-	logs.GetLogger().Infof("update Job received: %+v", jobData)
+	domain, ok := portDomainMap[port]
+	if ok {
+		jobData.JobResultURI = fmt.Sprintf("https://%s", domain)
+		submitJob(&jobData)
+		logs.GetLogger().Infof("update Job received: %+v", jobData)
+	}
 
 	c.JSON(http.StatusOK, jobData)
 }
@@ -245,8 +248,13 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 	}
 	logs.GetLogger().Infof("Created service %s", createService.GetObjectMeta().GetName())
 
-	url := fmt.Sprintf("http://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
-	return url
+	domain, ok := portDomainMap[port]
+	if ok {
+		//url := fmt.Sprintf("http://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
+		url := fmt.Sprintf("https://%s", domain)
+		return url
+	}
+	return ""
 }
 
 func deleteJob(namespace, spaceName string, port int) {

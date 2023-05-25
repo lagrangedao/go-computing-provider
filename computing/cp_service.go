@@ -283,7 +283,7 @@ func watchContainerRunningTime(key, namespace, spaceName string, time, port int)
 	}
 	conn := redisPool.Get()
 
-	_, err := conn.Do("HMSET", args...)
+	_, err := conn.Do("HSET", args...)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed save redis key, key: %s, error: %+v", key, err)
 		return
@@ -295,6 +295,13 @@ func watchContainerRunningTime(key, namespace, spaceName string, time, port int)
 		return
 	}
 
+	// save full info into hset
+	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
+	for key, val := range fields {
+		fullArgs = append(fullArgs, key, val)
+	}
+	conn.Do("HSET", fullArgs...)
+
 	go func() {
 		psc := redis.PubSubConn{Conn: redisPool.Get()}
 		psc.PSubscribe("__keyevent@0__:expired")
@@ -304,6 +311,7 @@ func watchContainerRunningTime(key, namespace, spaceName string, time, port int)
 				if n.Channel == "__keyevent@0__:expired" && string(n.Data) == key {
 					logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
 					deleteJob(namespace, spaceName, port)
+					redisPool.Get().Do("DEL", constants.REDIS_FULL_PREFIX+key)
 				}
 			case redis.Subscription:
 				logs.GetLogger().Infof("Subscribe %s", n.Channel)
@@ -366,14 +374,16 @@ func WatchExpiredTask() {
 			case redis.Message:
 				if n.Channel == "__keyevent@0__:expired" {
 					conn := redisPool.Get()
-					fields := []string{"k8s_namespace", "space_name", "port"}
-					values, err := redis.Strings(conn.Do("HMGET", redis.Args{}.Add(string(n.Data)).AddFlat(fields)...))
+					args := []interface{}{constants.REDIS_FULL_PREFIX + string(n.Data)}
+					args = append(args, "k8s_namespace", "space_name", "port")
+
+					values, err := redis.Strings(conn.Do("HMGET", args...))
 					if err != nil {
 						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", string(n.Data), err)
 						return
 					}
 
-					if len(fields) >= 3 {
+					if len(values) >= 3 {
 						namespace := values[0]
 						spaceName := values[1]
 						portStr := values[2]
@@ -385,6 +395,7 @@ func WatchExpiredTask() {
 
 						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
 						deleteJob(namespace, spaceName, port)
+						conn.Do("DEL", constants.REDIS_FULL_PREFIX+string(n.Data))
 					}
 				}
 			case redis.Subscription:

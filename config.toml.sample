@@ -1,24 +1,24 @@
 [API]
-Port = 8085
-MultiAddress = "/ip4/127.0.0.1/tcp/8085"
-PublicNetworkIp = ""
+Port = 8085                                   # The port number that the web server listens on
+MultiAddress = "/ip4/127.0.0.1/tcp/8085"      # The multiAddress for libp2p
+PublicNetworkIp = ""                          # The public network ip
 
 OPENAI_API_KEY = ""
-RedisUrl = "redis://127.0.0.1:6379"
-RedisPassword = ""
+RedisUrl = "redis://127.0.0.1:6379"           # The redis server address
+RedisPassword = ""                            # The redis server access password
 
 [LAD]
-ServerUrl = "https://api.lagrangedao.org"
-AccessToken = ""
+ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
+AccessToken = ""                              # Access token applied by lagrangedao.org
 
 [MCS]
-ApiKey = ""
-AccessToken = ""
-Bucket = ""
-Network = "polygon.mainnet"
-FileCachePath = ""
+ApiKey = ""                                   # The MCS API_KEY
+AccessToken = ""                              # The MCS API_KEY
+Bucket = ""                                   # The MCS bucket name
+Network = "polygon.mainnet"                   # polygon.mainnet for mainnet, polygon.mumbai for testnet
+FileCachePath = ""                            # Cache directory of job task raw data
 
 [Registry]
-ServerAddress = ""
-UserName = ""
-Password = ""
+ServerAddress = "https://hub.docker.com/"     # The docker container image registry address
+UserName = ""                                 # The login username
+Password = ""                                 # The login password

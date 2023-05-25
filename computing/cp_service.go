@@ -76,7 +76,7 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("service running successfully, job_result_url: %s", result.(string))
 	}()
 
-	jobData.JobResultURI = fmt.Sprintf("https://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
+	jobData.JobResultURI = fmt.Sprintf("https://hello.%s", conf.GetConfig().API.PublicNetworkIp)
 	submitJob(&jobData)
 	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
@@ -350,4 +350,48 @@ func portIsAvailable(port int) (bool, error) {
 func releasePort(port int) error {
 	_, err := redisPool.Get().Do("DEL", constants.REDIS_PORT_PREFIX+strconv.Itoa(port))
 	return err
+}
+
+func WatchExpiredTask() {
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("catch panic error: %+v", err)
+			}
+		}()
+		psc := redis.PubSubConn{Conn: redisPool.Get()}
+		psc.PSubscribe("__keyevent@0__:expired")
+		for {
+			switch n := psc.Receive().(type) {
+			case redis.Message:
+				if n.Channel == "__keyevent@0__:expired" {
+					conn := redisPool.Get()
+					fields := []string{"k8s_namespace", "space_name", "port"}
+					values, err := redis.Strings(conn.Do("HMGET", redis.Args{}.Add(string(n.Data)).AddFlat(fields)...))
+					if err != nil {
+						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", string(n.Data), err)
+						return
+					}
+
+					if len(fields) >= 3 {
+						namespace := values[0]
+						spaceName := values[1]
+						portStr := values[2]
+						port, err := strconv.Atoi(strings.TrimSpace(portStr))
+						if err != nil {
+							logs.GetLogger().Errorf("Failed get port, error: %+v", err)
+							return
+						}
+
+						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
+						deleteJob(namespace, spaceName, port)
+					}
+				}
+			case redis.Subscription:
+				logs.GetLogger().Infof("Subscribe %s", n.Channel)
+			case error:
+				return
+			}
+		}
+	}()
 }

@@ -115,7 +115,7 @@ func submitJob(jobData *models.JobData) {
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration, port int) string {
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
 
@@ -127,7 +127,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration
 
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
-	resultUrl := runContainerToK8s(creator, spaceName, imageName, dockerfilePath, resource, duration, port)
+	resultUrl := runContainerToK8s(creator, spaceName, imageName, dockerfilePath, resource, duration)
 	logs.GetLogger().Infof("Job: %s, running at: %s", jobSourceURI, resultUrl)
 	return resultUrl
 }
@@ -142,7 +142,7 @@ type DeploymentReq struct {
 	Res           common.Resource
 }
 
-func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration, port int) string {
+func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) string {
 	exposedPort, err := ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)

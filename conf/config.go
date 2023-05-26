@@ -19,11 +19,11 @@ type ComputeNode struct {
 }
 
 type API struct {
-	Port            int
-	MultiAddress    string
-	RedisUrl        string
-	RedisPassword   string
-	PublicNetworkIp string
+	Port          int
+	MultiAddress  string
+	RedisUrl      string
+	RedisPassword string
+	Domain        string
 }
 
 type LAD struct {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"io"
 	"log"
 	"net/http"
@@ -12,8 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"time"
 )
 
 func getSpaceName(apiURL string) (string, string, error) {
@@ -91,7 +91,7 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 			log.Printf("Download %s successfully.", spaceName)
 		}
 
-		imageName := "lagrange/" + spaceName
+		imageName := fmt.Sprintf("sonic868/%s:%d", spaceName, time.Now().Unix())
 		imageName = strings.ToLower(imageName)
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
 		dockerfilePath := filepath.Join(imagePath, "Dockerfile")

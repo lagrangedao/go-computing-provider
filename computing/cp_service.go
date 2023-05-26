@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,7 +25,6 @@ import (
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func GetServiceProviderInfo(c *gin.Context) {
@@ -54,13 +52,7 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 
-	port, err := generateRandomPort()
-	if err != nil {
-		logs.GetLogger().Errorf("Failed generate random port: %v", err)
-		return
-	}
-
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, jobData.Duration, port)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, jobData.Duration)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -76,12 +68,9 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("service running successfully, job_result_url: %s", result.(string))
 	}()
 
-	domain, ok := portDomainMap[port]
-	if ok {
-		jobData.JobResultURI = fmt.Sprintf("https://%s", domain)
-		submitJob(&jobData)
-		logs.GetLogger().Infof("update Job received: %+v", jobData)
-	}
+	jobData.JobResultURI = fmt.Sprintf("https://%s%s", spaceName, conf.GetConfig().API.Domain)
+	submitJob(&jobData)
+	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
 	c.JSON(http.StatusOK, jobData)
 }
@@ -188,11 +177,6 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		}
 	}
 
-	getService, err := k8sService.GetServiceByName(context.TODO(), nameSpace, constants.K8S_SERVICE_NAME_PREFIX+spaceName, metaV1.GetOptions{})
-	if !errors.IsNotFound(err) {
-		releasePort(int(getService.Spec.Ports[0].NodePort))
-	}
-
 	// first delete k8s resources
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
 	k8sService.DeleteService(context.TODO(), nameSpace, serviceName)
@@ -214,50 +198,27 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		return ""
 	}
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
-	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), nameSpace, spaceName, duration, port)
+	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), nameSpace, spaceName, duration)
 
-	service := &coreV1.Service{
-		TypeMeta: metaV1.TypeMeta{
-			Kind:       "Service",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      constants.K8S_SERVICE_NAME_PREFIX + spaceName,
-			Namespace: nameSpace,
-		},
-		Spec: coreV1.ServiceSpec{
-			Type: coreV1.ServiceTypeNodePort,
-			Ports: []coreV1.ServicePort{
-				{
-					Name:       "http",
-					Port:       int32(containerPort),
-					TargetPort: intstr.FromInt(int(containerPort)),
-					Protocol:   coreV1.ProtocolTCP,
-					NodePort:   int32(port),
-				},
-			},
-			Selector: map[string]string{
-				"app": spaceName,
-			},
-		},
-	}
-	createService, err := k8sService.CreateService(context.TODO(), nameSpace, service, metaV1.CreateOptions{})
+	createService, err := k8sService.CreateService(context.TODO(), nameSpace, spaceName, int32(containerPort))
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return ""
 	}
-	logs.GetLogger().Infof("Created service %s", createService.GetObjectMeta().GetName())
+	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
-	domain, ok := portDomainMap[port]
-	if ok {
-		//url := fmt.Sprintf("http://%s:%d", conf.GetConfig().API.PublicNetworkIp, port)
-		url := fmt.Sprintf("https://%s", domain)
-		return url
+	hostName := spaceName + conf.GetConfig().API.Domain
+	createIngress, err := k8sService.CreateIngress(context.TODO(), nameSpace, spaceName, hostName, int32(containerPort))
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return ""
 	}
+	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
+
 	return ""
 }
 
-func deleteJob(namespace, spaceName string, port int) {
+func deleteJob(namespace, spaceName string) {
 	k8sService := NewK8sService()
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
 	if err := k8sService.DeleteService(context.TODO(), namespace, serviceName); err != nil {
@@ -272,18 +233,12 @@ func deleteJob(namespace, spaceName string, port int) {
 		return
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", deployName)
-
-	if err := releasePort(port); err != nil {
-		logs.GetLogger().Errorf("Failed release port, port: %d, error: %+v", port, err)
-	}
-	logs.GetLogger().Infof("release port finished, port: %d", port)
 }
 
-func watchContainerRunningTime(key, namespace, spaceName string, time, port int) {
+func watchContainerRunningTime(key, namespace, spaceName string, time int) {
 	fields := map[string]string{
 		"k8s_namespace": namespace,
 		"space_name":    spaceName,
-		"port":          strconv.Itoa(port),
 	}
 	args := []interface{}{key}
 	for key, val := range fields {
@@ -318,7 +273,7 @@ func watchContainerRunningTime(key, namespace, spaceName string, time, port int)
 			case redis.Message:
 				if n.Channel == "__keyevent@0__:expired" && string(n.Data) == key {
 					logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
-					deleteJob(namespace, spaceName, port)
+					deleteJob(namespace, spaceName)
 					redisPool.Get().Do("DEL", constants.REDIS_FULL_PREFIX+key)
 				}
 			case redis.Subscription:
@@ -328,44 +283,6 @@ func watchContainerRunningTime(key, namespace, spaceName string, time, port int)
 			}
 		}
 	}()
-}
-
-func generateRandomPort() (int, error) {
-	rand.Seed(time.Now().UnixNano())
-	var total int
-	for {
-		port := rand.Intn(constants.MAX_PORT-constants.MIN_PORT+1) + constants.MIN_PORT
-		available, err := portIsAvailable(port)
-		if err != nil {
-			return 0, err
-		}
-		if available {
-			return port, nil
-		}
-		total++
-		if total >= 8 {
-			return 0, fmt.Errorf("not enough available IP to allocate")
-		}
-	}
-}
-
-// Check if a port is available
-func portIsAvailable(port int) (bool, error) {
-	//  if it returns 1, it means the key already exists
-	result, err := redisPool.Get().Do("SETNX", constants.REDIS_PORT_PREFIX+strconv.Itoa(port), "is_used")
-	if err != nil {
-		return false, err
-	}
-	exist := result.(int64)
-	if exist == 1 {
-		return true, nil
-	}
-	return false, nil
-}
-
-func releasePort(port int) error {
-	_, err := redisPool.Get().Do("DEL", constants.REDIS_PORT_PREFIX+strconv.Itoa(port))
-	return err
 }
 
 func WatchExpiredTask() {
@@ -383,7 +300,7 @@ func WatchExpiredTask() {
 				if n.Channel == "__keyevent@0__:expired" {
 					conn := redisPool.Get()
 					args := []interface{}{constants.REDIS_FULL_PREFIX + string(n.Data)}
-					args = append(args, "k8s_namespace", "space_name", "port")
+					args = append(args, "k8s_namespace", "space_name")
 
 					values, err := redis.Strings(conn.Do("HMGET", args...))
 					if err != nil {
@@ -394,15 +311,8 @@ func WatchExpiredTask() {
 					if len(values) >= 3 {
 						namespace := values[0]
 						spaceName := values[1]
-						portStr := values[2]
-						port, err := strconv.Atoi(strings.TrimSpace(portStr))
-						if err != nil {
-							logs.GetLogger().Errorf("Failed get port, error: %+v", err)
-							return
-						}
-
 						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
-						deleteJob(namespace, spaceName, port)
+						deleteJob(namespace, spaceName)
 						conn.Do("DEL", constants.REDIS_FULL_PREFIX+string(n.Data))
 					}
 				}

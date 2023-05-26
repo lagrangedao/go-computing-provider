@@ -124,7 +124,7 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 				},
 			},
 			Selector: map[string]string{
-				"app": spaceName,
+				"lad_app": spaceName,
 			},
 		},
 	}

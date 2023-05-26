@@ -65,7 +65,7 @@ func ReceiveJob(c *gin.Context) {
 			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
 			return
 		}
-		logs.GetLogger().Infof("service running successfully, job_result_url: %s", result.(string))
+		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
 	}()
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s%s", spaceName, conf.GetConfig().API.Domain)

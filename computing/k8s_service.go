@@ -169,6 +169,10 @@ func (s *K8sService) CreateIngress(ctx context.Context, nameSpace, label, hostNa
 	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Create(ctx, ingress, metaV1.CreateOptions{})
 }
 
+func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, label string) error {
+	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Delete(ctx, label, metaV1.DeleteOptions{})
+}
+
 func (s *K8sService) GetServiceByName(ctx context.Context, namespace string,
 	serviceName string, opts metaV1.GetOptions) (result *coreV1.Service, err error) {
 	return s.k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, opts)

@@ -177,6 +177,8 @@ func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res
 		}
 	}
 
+	k8sService.DeleteIngress(context.TODO(), nameSpace, spaceName)
+
 	// first delete k8s resources
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
 	k8sService.DeleteService(context.TODO(), nameSpace, serviceName)

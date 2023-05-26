@@ -136,7 +136,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, nameSpace, label, hostNa
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: label,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class": "traefik",
+				"kubernetes.io/ingress.class": "nginx",
 			},
 		},
 		Spec: networkingv1.IngressSpec{

@@ -117,7 +117,6 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 			Namespace: nameSpace,
 		},
 		Spec: coreV1.ServiceSpec{
-			Type: coreV1.ServiceTypeNodePort,
 			Ports: []coreV1.ServicePort{
 				{
 					Name: "http",
@@ -152,7 +151,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, nameSpace, label, hostNa
 									PathType: func() *networkingv1.PathType { t := networkingv1.PathTypeExact; return &t }(),
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
-											Name: label,
+											Name: constants.K8S_SERVICE_NAME_PREFIX + label,
 											Port: networkingv1.ServiceBackendPort{
 												Number: port,
 											},

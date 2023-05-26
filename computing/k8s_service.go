@@ -134,7 +134,7 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName, hostName string, port int32) (*networkingv1.Ingress, error) {
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name: spaceName,
+			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
 				"kubernetes.io/ingress.class": "nginx",
 			},

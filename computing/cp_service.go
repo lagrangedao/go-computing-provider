@@ -117,107 +117,104 @@ func submitJob(jobData *models.JobData) {
 
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
-	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
 
+	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
 	resource, ok := common.HardwareResource[hardware]
 	if !ok {
 		logs.GetLogger().Warnf("not found resource.")
 		return ""
 	}
-
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
-	resultUrl := runContainerToK8s(creator, spaceName, imageName, dockerfilePath, resource, duration)
-	logs.GetLogger().Infof("Job: %s, running at: %s", jobSourceURI, resultUrl)
-	return resultUrl
+	hostName := strings.ToLower(strings.TrimSpace(spaceName)) + conf.GetConfig().API.Domain
+	runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
+	return hostName
 }
 
 type DeploymentReq struct {
 	NameSpace     string
 	DeployName    string
-	ContainerName string
 	ImageName     string
 	Label         map[string]string
 	ContainerPort int32
 	Res           common.Resource
 }
 
-func runContainerToK8s(creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) string {
+func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
 	exposedPort, err := ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
-		return ""
+		return
 	}
-
 	containerPort, err := strconv.ParseInt(exposedPort, 10, 64)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed to convert exposed port: %v", err)
-		return ""
+		return
 	}
 
 	k8sService := NewK8sService()
-
-	nameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
-	if _, err = k8sService.GetNameSpace(context.TODO(), nameSpace, metaV1.GetOptions{}); err != nil {
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
+	if _, err = k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			namespace := &coreV1.Namespace{
 				ObjectMeta: metaV1.ObjectMeta{
-					Name: nameSpace,
+					Name: k8sNameSpace,
 				},
 			}
 			createdNamespace, err := k8sService.CreateNameSpace(context.TODO(), namespace, metaV1.CreateOptions{})
 			if err != nil {
 				logs.GetLogger().Errorf("Failed create namespace, error: %+v", err)
-				return ""
+				return
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
 		} else {
 			logs.GetLogger().Error(err)
-			return ""
+			return
 		}
 	}
 
-	k8sService.DeleteIngress(context.TODO(), nameSpace, spaceName)
-
-	// first delete k8s resources
+	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceName
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
-	k8sService.DeleteService(context.TODO(), nameSpace, serviceName)
-
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
-	k8sService.DeleteDeployment(context.TODO(), nameSpace, deployName)
+	if err := k8sService.DeleteIngress(context.TODO(), k8sNameSpace, ingressName); !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete ingress, error: %+v", err)
+	}
+	if err := k8sService.DeleteService(context.TODO(), k8sNameSpace, serviceName); !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete service, error: %+v", err)
+	}
+	if err := k8sService.DeleteDeployment(context.TODO(), k8sNameSpace, deployName); !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete deployment, error: %+v", err)
+	}
 
-	createDeployment, err := k8sService.CreateDeployment(context.TODO(), nameSpace, DeploymentReq{
-		NameSpace:     nameSpace,
+	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, DeploymentReq{
+		NameSpace:     k8sNameSpace,
 		DeployName:    constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
-		ContainerName: constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
 		ImageName:     imageName,
-		Label:         map[string]string{"app": spaceName},
+		Label:         map[string]string{"lad_app": spaceName},
 		ContainerPort: int32(containerPort),
 		Res:           res,
 	})
 	if err != nil {
 		logs.GetLogger().Error(err)
-		return ""
+		return
 	}
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
-	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), nameSpace, spaceName, duration)
+	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, duration)
 
-	createService, err := k8sService.CreateService(context.TODO(), nameSpace, spaceName, int32(containerPort))
+	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceName, int32(containerPort))
 	if err != nil {
 		logs.GetLogger().Error(err)
-		return ""
+		return
 	}
 	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
-	hostName := spaceName + conf.GetConfig().API.Domain
-	createIngress, err := k8sService.CreateIngress(context.TODO(), nameSpace, spaceName, hostName, int32(containerPort))
+	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceName, hostName, int32(containerPort))
 	if err != nil {
 		logs.GetLogger().Error(err)
-		return ""
+		return
 	}
 	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
-
-	return ""
+	return
 }
 
 func deleteJob(namespace, spaceName string) {

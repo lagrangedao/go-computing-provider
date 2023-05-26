@@ -80,7 +80,6 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 
 				Spec: coreV1.PodSpec{
 					Containers: []coreV1.Container{{
-						Name:            deploy.ContainerName,
 						Image:           deploy.ImageName,
 						ImagePullPolicy: coreV1.PullIfNotPresent,
 						Ports: []coreV1.ContainerPort{{
@@ -131,10 +130,10 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 	return s.k8sClient.CoreV1().Services(nameSpace).Create(ctx, service, metaV1.CreateOptions{})
 }
 
-func (s *K8sService) CreateIngress(ctx context.Context, nameSpace, label, hostName string, port int32) (*networkingv1.Ingress, error) {
+func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName, hostName string, port int32) (*networkingv1.Ingress, error) {
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name: label,
+			Name: spaceName,
 			Annotations: map[string]string{
 				"kubernetes.io/ingress.class": "nginx",
 			},
@@ -151,7 +150,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, nameSpace, label, hostNa
 									PathType: func() *networkingv1.PathType { t := networkingv1.PathTypeExact; return &t }(),
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{
-											Name: constants.K8S_SERVICE_NAME_PREFIX + label,
+											Name: constants.K8S_SERVICE_NAME_PREFIX + spaceName,
 											Port: networkingv1.ServiceBackendPort{
 												Number: port,
 											},
@@ -166,7 +165,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, nameSpace, label, hostNa
 		},
 	}
 
-	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Create(ctx, ingress, metaV1.CreateOptions{})
+	return s.k8sClient.NetworkingV1().Ingresses(k8sNameSpace).Create(ctx, ingress, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, label string) error {

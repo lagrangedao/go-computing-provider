@@ -80,6 +80,7 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 
 				Spec: coreV1.PodSpec{
 					Containers: []coreV1.Container{{
+						Name:            deploy.ContainerName,
 						Image:           deploy.ImageName,
 						ImagePullPolicy: coreV1.PullIfNotPresent,
 						Ports: []coreV1.ContainerPort{{

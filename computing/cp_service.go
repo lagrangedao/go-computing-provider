@@ -134,6 +134,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration
 type DeploymentReq struct {
 	NameSpace     string
 	DeployName    string
+	ContainerName string
 	ImageName     string
 	Label         map[string]string
 	ContainerPort int32
@@ -176,19 +177,26 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceName
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
-	if err := k8sService.DeleteIngress(context.TODO(), k8sNameSpace, ingressName); !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete ingress, error: %+v", err)
+	if err := k8sService.DeleteIngress(context.TODO(), k8sNameSpace, ingressName); err != nil {
+		if !errors.IsNotFound(err) {
+			logs.GetLogger().Errorf("Failed delete ingress, error: %+v", err)
+		}
 	}
-	if err := k8sService.DeleteService(context.TODO(), k8sNameSpace, serviceName); !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete service, error: %+v", err)
+	if err := k8sService.DeleteService(context.TODO(), k8sNameSpace, serviceName); err != nil {
+		if !errors.IsNotFound(err) {
+			logs.GetLogger().Errorf("Failed delete service, error: %+v", err)
+		}
 	}
-	if err := k8sService.DeleteDeployment(context.TODO(), k8sNameSpace, deployName); !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete deployment, error: %+v", err)
+	if err := k8sService.DeleteDeployment(context.TODO(), k8sNameSpace, deployName); err != nil {
+		if !errors.IsNotFound(err) {
+			logs.GetLogger().Errorf("Failed delete deployment, error: %+v", err)
+		}
 	}
 
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, DeploymentReq{
 		NameSpace:     k8sNameSpace,
 		DeployName:    constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
+		ContainerName: constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
 		ImageName:     imageName,
 		Label:         map[string]string{"lad_app": spaceName},
 		ContainerPort: int32(containerPort),

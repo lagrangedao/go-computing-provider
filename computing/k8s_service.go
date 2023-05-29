@@ -136,8 +136,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class":                "nginx",
-				"nginx.ingress.kubernetes.io/rewrite-target": "/",
+				"kubernetes.io/ingress.class": "nginx",
 			},
 		},
 		Spec: networkingv1.IngressSpec{
@@ -147,6 +146,18 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 					IngressRuleValue: networkingv1.IngressRuleValue{
 						HTTP: &networkingv1.HTTPIngressRuleValue{
 							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     "/convert_address_f4_0X",
+									PathType: func() *networkingv1.PathType { t := networkingv1.PathTypeExact; return &t }(),
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: constants.K8S_SERVICE_NAME_PREFIX + spaceName,
+											Port: networkingv1.ServiceBackendPort{
+												Number: port,
+											},
+										},
+									},
+								},
 								{
 									Path:     "/",
 									PathType: func() *networkingv1.PathType { t := networkingv1.PathTypeExact; return &t }(),

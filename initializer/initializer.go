@@ -37,6 +37,7 @@ func sendHeartbeat(nodeId string) {
 	} else {
 		body, err := ioutil.ReadAll(resp.Body)
 		logs.GetLogger().Infof("Heartbeat sent. Status code: %d\n %s", resp.StatusCode, string(body))
+		computing.Reconnect(nodeId)
 		if err != nil {
 			fmt.Println(err)
 			return

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,7 +53,8 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, jobData.Duration)
+	hostPrefix := generateString(10)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostPrefix, jobData.Duration)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -68,7 +70,7 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
 	}()
 
-	jobData.JobResultURI = fmt.Sprintf("https://%s%s", spaceName, conf.GetConfig().API.Domain)
+	jobData.JobResultURI = fmt.Sprintf("https://%s%s", hostPrefix, conf.GetConfig().API.Domain)
 	submitJob(&jobData)
 	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
@@ -115,7 +117,7 @@ func submitJob(jobData *models.JobData) {
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration int) string {
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
@@ -126,7 +128,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware string, duration
 	}
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
-	hostName := strings.ToLower(strings.TrimSpace(spaceName)) + conf.GetConfig().API.Domain
+	hostName := hostPrefix + conf.GetConfig().API.Domain
 	runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
 	return hostName
 }
@@ -154,6 +156,8 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 	}
 
 	k8sService := NewK8sService()
+
+	// create namespace
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
 	if _, err = k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
@@ -174,25 +178,10 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 		}
 	}
 
-	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceName
-	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
-	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
-	if err := k8sService.DeleteIngress(context.TODO(), k8sNameSpace, ingressName); err != nil {
-		if !errors.IsNotFound(err) {
-			logs.GetLogger().Errorf("Failed delete ingress, error: %+v", err)
-		}
-	}
-	if err := k8sService.DeleteService(context.TODO(), k8sNameSpace, serviceName); err != nil {
-		if !errors.IsNotFound(err) {
-			logs.GetLogger().Errorf("Failed delete service, error: %+v", err)
-		}
-	}
-	if err := k8sService.DeleteDeployment(context.TODO(), k8sNameSpace, deployName); err != nil {
-		if !errors.IsNotFound(err) {
-			logs.GetLogger().Errorf("Failed delete deployment, error: %+v", err)
-		}
-	}
+	// first delete old resource
+	deleteJob(k8sNameSpace, spaceName)
 
+	// create deployment
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, DeploymentReq{
 		NameSpace:     k8sNameSpace,
 		DeployName:    constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
@@ -207,8 +196,8 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 		return
 	}
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
-	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, duration)
 
+	// create service
 	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceName, int32(containerPort))
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -216,57 +205,58 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 	}
 	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
+	// create ingress
 	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceName, hostName, int32(containerPort))
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
 	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
+
+	// watch running time and release resources when expired
+	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, int64(duration))
 	return
 }
 
 func deleteJob(namespace, spaceName string) {
-	k8sService := NewK8sService()
+	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
-	if err := k8sService.DeleteService(context.TODO(), namespace, serviceName); err != nil {
+	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceName
+
+	k8sService := NewK8sService()
+	if err := k8sService.DeleteIngress(context.TODO(), namespace, ingressName); err != nil && !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete ingress, ingressName: %s, error: %+v", deployName, err)
+		return
+	}
+	logs.GetLogger().Infof("Deleted ingress %s finished", ingressName)
+
+	if err := k8sService.DeleteService(context.TODO(), namespace, serviceName); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete service, serviceName: %s, error: %+v", serviceName, err)
 		return
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", serviceName)
 
-	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
-	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil {
+	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
 		return
 	}
-	logs.GetLogger().Infof("Deleted service %s finished", deployName)
+	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 }
 
-func watchContainerRunningTime(key, namespace, spaceName string, time int) {
+func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {
+	conn := redisPool.Get()
+	_, err := conn.Do("SET", key, "wait-delete", "EX", runTime)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed set redis key and expire time, key: %s, error: %+v", key, err)
+		return
+	}
+
+	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
 	fields := map[string]string{
 		"k8s_namespace": namespace,
 		"space_name":    spaceName,
+		"expire_time":   strconv.Itoa(int(time.Now().Unix() + runTime)),
 	}
-	args := []interface{}{key}
-	for key, val := range fields {
-		args = append(args, key, val)
-	}
-	conn := redisPool.Get()
-
-	_, err := conn.Do("HSET", args...)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed save redis key, key: %s, error: %+v", key, err)
-		return
-	}
-
-	_, err = conn.Do("EXPIRE", key, time)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed expire redis key, key: %s, error: %+v", key, err)
-		return
-	}
-
-	// save full info into hset
-	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
 	for key, val := range fields {
 		fullArgs = append(fullArgs, key, val)
 	}
@@ -293,41 +283,68 @@ func watchContainerRunningTime(key, namespace, spaceName string, time int) {
 }
 
 func WatchExpiredTask() {
+	ticker := time.NewTicker(30 * time.Second)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
 				logs.GetLogger().Errorf("catch panic error: %+v", err)
 			}
 		}()
-		psc := redis.PubSubConn{Conn: redisPool.Get()}
-		psc.PSubscribe("__keyevent@0__:expired")
-		for {
-			switch n := psc.Receive().(type) {
-			case redis.Message:
-				if n.Channel == "__keyevent@0__:expired" {
-					conn := redisPool.Get()
-					args := []interface{}{constants.REDIS_FULL_PREFIX + string(n.Data)}
-					args = append(args, "k8s_namespace", "space_name")
 
-					values, err := redis.Strings(conn.Do("HMGET", args...))
-					if err != nil {
-						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", string(n.Data), err)
-						return
-					}
-
-					if len(values) >= 3 {
-						namespace := values[0]
-						spaceName := values[1]
-						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
-						deleteJob(namespace, spaceName)
-						conn.Do("DEL", constants.REDIS_FULL_PREFIX+string(n.Data))
-					}
-				}
-			case redis.Subscription:
-				logs.GetLogger().Infof("Subscribe %s", n.Channel)
-			case error:
+		var deleteKey []string
+		for range ticker.C {
+			conn := redisPool.Get()
+			cursor := "0"
+			prefix := constants.REDIS_FULL_PREFIX + "*"
+			values, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", prefix))
+			if err != nil {
+				logs.GetLogger().Errorf("Failed scan redis %s prefix, error: %+v", prefix, err)
 				return
 			}
+
+			cursor, _ = redis.String(values[0], nil)
+			keys, _ := redis.Strings(values[1], nil)
+			for _, key := range keys {
+				args := []interface{}{key}
+				args = append(args, "k8s_namespace", "space_name", "expire_time")
+				valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
+				if err != nil {
+					logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
+					return
+				}
+
+				if len(values) >= 3 {
+					namespace := valuesStr[0]
+					spaceName := valuesStr[1]
+					expireTimeStr := valuesStr[2]
+					expireTime, err := strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
+					if err != nil {
+						logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
+						return
+					}
+					if time.Now().Unix() > expireTime {
+						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
+						deleteJob(namespace, spaceName)
+						deleteKey = append(deleteKey, key)
+					}
+				}
+			}
+			if cursor == "0" {
+				break
+			}
+			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
 		}
 	}()
+}
+
+func generateString(length int) string {
+	characters := "abcdefghijklmnopqrstuvwxyz"
+	numbers := "0123456789"
+	source := characters + numbers
+	result := make([]byte, length)
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < length; i++ {
+		result[i] = source[rand.Intn(len(source))]
+	}
+	return string(result)
 }

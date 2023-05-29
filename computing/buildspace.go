@@ -91,7 +91,7 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 			log.Printf("Download %s successfully.", spaceName)
 		}
 
-		imageName := fmt.Sprintf("sonic868/%s:%d", spaceName, time.Now().Unix())
+		imageName := fmt.Sprintf("lagrange/%s:%d", spaceName, time.Now().Unix())
 		imageName = strings.ToLower(imageName)
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
 		dockerfilePath := filepath.Join(imagePath, "Dockerfile")

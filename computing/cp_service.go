@@ -313,7 +313,7 @@ func WatchExpiredTask() {
 					return
 				}
 
-				if len(values) >= 3 {
+				if len(valuesStr) >= 3 {
 					namespace := valuesStr[0]
 					spaceName := valuesStr[1]
 					expireTimeStr := valuesStr[2]
@@ -329,10 +329,12 @@ func WatchExpiredTask() {
 					}
 				}
 			}
+			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
+			logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
+
 			if cursor == "0" {
 				break
 			}
-			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
 		}
 	}()
 }

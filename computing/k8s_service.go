@@ -147,7 +147,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 						HTTP: &networkingv1.HTTPIngressRuleValue{
 							Paths: []networkingv1.HTTPIngressPath{
 								{
-									Path:     "/convert_address_f4_0X",
+									Path:     "/*",
 									PathType: func() *networkingv1.PathType { t := networkingv1.PathTypeExact; return &t }(),
 									Backend: networkingv1.IngressBackend{
 										Service: &networkingv1.IngressServiceBackend{

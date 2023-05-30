@@ -330,7 +330,10 @@ func WatchExpiredTask() {
 				}
 			}
 			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
-			logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
+			if len(deleteKey) > 0 {
+				logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
+				deleteKey = nil
+			}
 
 			if cursor == "0" {
 				break

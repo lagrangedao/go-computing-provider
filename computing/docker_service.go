@@ -216,7 +216,7 @@ type ErrorLine struct {
 }
 
 func (ds *DockerService) PushImage(imagesName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*600)
 	defer cancel()
 
 	var authConfig = types.AuthConfig{

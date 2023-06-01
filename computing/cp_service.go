@@ -11,7 +11,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -28,9 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-var lock sync.Mutex
-var buildImageCh = make(chan string, 100)
 
 func GetServiceProviderInfo(c *gin.Context) {
 	info := new(models.HostInfo)
@@ -159,14 +155,8 @@ func RestartJob(c *gin.Context) {
 }
 
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
-	//lock.Lock()
-	//defer lock.Unlock()
-
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
-	//go func() {
-	//	buildImageCh <- imageName
-	//}()
 	resource, ok := common.HardwareResource[hardware]
 	if !ok {
 		logs.GetLogger().Warnf("not found resource.")
@@ -391,70 +381,22 @@ func WatchExpiredTask() {
 }
 
 func WatchUnusedImageTask() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(24 * time.Hour)
 	go func() {
-		lock.Lock()
 		defer func() {
-			lock.Unlock()
 			if err := recover(); err != nil {
 				logs.GetLogger().Errorf("catch panic error: %+v", err)
 			}
 		}()
 
 		for range ticker.C {
-			useKey := "use_images:"
-			var useImages = []interface{}{useKey}
-
-		loop:
-			for {
-				select {
-				case buildingImage := <-buildImageCh:
-					useImages = append(useImages, buildingImage)
-				case <-time.After(5 * time.Second):
-					break loop
-				}
-			}
-
-			allKey := "all_images:"
-			var allImages = []interface{}{allKey}
+			logs.GetLogger().Infof("Starting clean unsed images...")
 			dockerService := NewDockerService()
-			dockerImages, err := dockerService.ListImages()
-			for k := range dockerImages {
-				allImages = append(allImages, k)
+			if err := dockerService.CleanResource(); err != nil {
+				logs.GetLogger().Infof("Failed started clean unsed images, error: %+v", err)
 			}
-
-			k8sService := NewK8sService()
-			namespaces, err := k8sService.ListNamespace(context.TODO())
-			if err != nil {
-				logs.GetLogger().Errorf("Failed get namespaces,error: %+v", err)
-				return
-			}
-
-			for _, namespace := range namespaces {
-				usedImages, err := k8sService.ListUsedImage(context.TODO(), namespace)
-				if err != nil {
-					logs.GetLogger().Errorf("Failed get pod images, namespace: %s, error: %+v", namespace, err)
-					continue
-				}
-				for _, image := range usedImages {
-					useImages = append(useImages, image)
-				}
-			}
-
-			needDeletedImages, err := diffData(allKey, useKey, allImages, useImages)
-			if err != nil {
-				logs.GetLogger().Errorf("Failed need to deleted images, error: %+v", err)
-				return
-			}
-			for _, imageName := range needDeletedImages {
-				if id, ok := dockerImages[imageName]; ok {
-					if err := dockerService.RemoveImage(id); err != nil {
-						logs.GetLogger().Errorf("Failed deleted images, imageName: %s, imageId: %s, error: %+v", imageName, id, err)
-					}
-				}
-			}
-			redisPool.Get().Do("DEL", allKey, useKey)
 		}
+
 	}()
 }
 

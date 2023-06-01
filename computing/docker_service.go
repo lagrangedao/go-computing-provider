@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"io"
 	"log"
@@ -289,5 +290,11 @@ func (ds *DockerService) RemoveImage(imageId string) error {
 		Force:         true,
 		PruneChildren: true,
 	})
+	return err
+}
+
+func (ds *DockerService) CleanResource() error {
+	ctx := context.Background()
+	_, err := ds.c.ImagesPrune(ctx, filters.NewArgs())
 	return err
 }

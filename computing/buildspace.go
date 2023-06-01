@@ -103,10 +103,10 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 			return "", ""
 		}
 
-		if err := dockerService.PushImage(imageName); err != nil {
-			logs.GetLogger().Errorf("Error Docker push image: %v", err)
-			return "", ""
-		}
+		//if err := dockerService.PushImage(imageName); err != nil {
+		//	logs.GetLogger().Errorf("Error Docker push image: %v", err)
+		//	return "", ""
+		//}
 
 		return imageName, dockerfilePath
 	} else {

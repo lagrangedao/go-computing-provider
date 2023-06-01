@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,6 +29,9 @@ import (
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var lock sync.Mutex
+var buildImageCh = make(chan string, 100)
+
 func GetServiceProviderInfo(c *gin.Context) {
 	info := new(models.HostInfo)
 	//info.SwanProviderVersion = common.GetVersion()
@@ -44,7 +48,7 @@ func ReceiveJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logs.GetLogger().Infof("Job received: %+v", jobData)
+	logs.GetLogger().Infof("Job received: %s", jobData.JobSourceURI)
 
 	jobSourceURI := jobData.JobSourceURI
 	creator, spaceName, err := getSpaceName(jobSourceURI)
@@ -59,8 +63,6 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
 	}
-	logs.GetLogger().Infof("delayTask detail info: %+v", delayTask)
-
 	go func() {
 		result, err := delayTask.Get(180 * time.Second)
 		if err != nil {
@@ -72,7 +74,6 @@ func ReceiveJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s%s", hostPrefix, conf.GetConfig().API.Domain)
 	submitJob(&jobData)
-	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
 	c.JSON(http.StatusOK, jobData)
 }
@@ -117,10 +118,55 @@ func submitJob(jobData *models.JobData) {
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
-	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
+func RestartJob(c *gin.Context) {
+	var jobData models.JobData
 
+	if err := c.ShouldBindJSON(&jobData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logs.GetLogger().Infof("Job received: %+v", jobData)
+
+	jobSourceURI := jobData.JobSourceURI
+	creator, spaceName, err := getSpaceName(jobSourceURI)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get space name: %v", err)
+		return
+	}
+
+	hostPrefix := generateString(10)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostPrefix, jobData.Duration)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
+		return
+	}
+	logs.GetLogger().Infof("delayTask detail info: %+v", delayTask)
+
+	go func() {
+		result, err := delayTask.Get(180 * time.Second)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
+			return
+		}
+		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
+	}()
+
+	jobData.JobResultURI = fmt.Sprintf("https://%s%s", hostPrefix, conf.GetConfig().API.Domain)
+	submitJob(&jobData)
+	logs.GetLogger().Infof("update Job received: %+v", jobData)
+
+	c.JSON(http.StatusOK, jobData)
+}
+
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
+	lock.Lock()
+	defer lock.Unlock()
+
+	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
+	go func() {
+		buildImageCh <- imageName
+	}()
 	resource, ok := common.HardwareResource[hardware]
 	if !ok {
 		logs.GetLogger().Warnf("not found resource.")
@@ -156,7 +202,6 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 	}
 
 	k8sService := NewK8sService()
-
 	// create namespace
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
 	if _, err = k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
@@ -164,6 +209,9 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 			namespace := &coreV1.Namespace{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: k8sNameSpace,
+					Labels: map[string]string{
+						"lab-ns": "lagrange-dao",
+					},
 				},
 			}
 			createdNamespace, err := k8sService.CreateNameSpace(context.TODO(), namespace, metaV1.CreateOptions{})
@@ -340,6 +388,89 @@ func WatchExpiredTask() {
 			}
 		}
 	}()
+}
+
+func WatchUnusedImageTask() {
+	ticker := time.NewTicker(10 * time.Minute)
+	go func() {
+		lock.Lock()
+		defer func() {
+			lock.Unlock()
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("catch panic error: %+v", err)
+			}
+		}()
+
+		for range ticker.C {
+			useKey := "use_images:"
+			var useImages = []interface{}{useKey}
+
+		loop:
+			for {
+				select {
+				case buildingImage := <-buildImageCh:
+					useImages = append(useImages, buildingImage)
+				case <-time.After(5 * time.Second):
+					break loop
+				}
+			}
+
+			allKey := "all_images:"
+			var allImages = []interface{}{allKey}
+			dockerService := NewDockerService()
+			dockerImages, err := dockerService.ListImages()
+			for k := range dockerImages {
+				allImages = append(allImages, k)
+			}
+
+			k8sService := NewK8sService()
+			namespaces, err := k8sService.ListNamespace(context.TODO())
+			if err != nil {
+				logs.GetLogger().Errorf("Failed get namespaces,error: %+v", err)
+				return
+			}
+
+			for _, namespace := range namespaces {
+				usedImages, err := k8sService.ListUsedImage(context.TODO(), namespace)
+				if err != nil {
+					logs.GetLogger().Errorf("Failed get pod images, namespace: %s, error: %+v", namespace, err)
+					continue
+				}
+				for _, image := range usedImages {
+					useImages = append(useImages, image)
+				}
+			}
+
+			needDeletedImages, err := diffData(allKey, useKey, allImages, useImages)
+			if err != nil {
+				logs.GetLogger().Errorf("Failed need to deleted images, error: %+v", err)
+				return
+			}
+			for _, imageName := range needDeletedImages {
+				if id, ok := dockerImages[imageName]; ok {
+					if err := dockerService.RemoveImage(id); err != nil {
+						logs.GetLogger().Errorf("Failed deleted images, imageName: %s, imageId: %s, error: %+v", imageName, id, err)
+					}
+				}
+			}
+			redisPool.Get().Do("DEL", allKey, useKey)
+		}
+	}()
+}
+
+func diffData(allKey, useKey string, allImages, useImages []interface{}) ([]string, error) {
+	conn := redisPool.Get()
+	if _, err := conn.Do("SADD", allImages...); err != nil {
+		return nil, err
+	}
+	if _, err := conn.Do("SADD", useImages...); err != nil {
+		return nil, err
+	}
+	reply, err := redis.Strings(conn.Do("SDIFF", allKey, useKey))
+	if err != nil {
+		return nil, err
+	}
+	return reply, nil
 }
 
 func generateString(length int) string {

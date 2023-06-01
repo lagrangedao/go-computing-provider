@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"github.com/lagrangedao/go-computing-provider/constants"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
 	"path/filepath"
 	"sync"
@@ -86,18 +87,18 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: deploy.ContainerPort,
 						}},
-						//Resources: coreV1.ResourceRequirements{
-						//	Limits: coreV1.ResourceList{
-						//		coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-						//		coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
-						//		coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-						//	},
-						//	Requests: coreV1.ResourceList{
-						//		coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-						//		coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
-						//		coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-						//	},
-						//},
+						Resources: coreV1.ResourceRequirements{
+							Limits: coreV1.ResourceList{
+								coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+							},
+							Requests: coreV1.ResourceList{
+								coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+							},
+						},
 					}},
 				},
 			},
@@ -225,4 +226,32 @@ func (s *K8sService) CreateNameSpace(ctx context.Context, nameSpace *coreV1.Name
 
 func (s *K8sService) GetNameSpace(ctx context.Context, nameSpace string, opts metaV1.GetOptions) (result *coreV1.Namespace, err error) {
 	return s.k8sClient.CoreV1().Namespaces().Get(ctx, nameSpace, opts)
+}
+
+func (s *K8sService) ListUsedImage(ctx context.Context, nameSpace string) ([]string, error) {
+	list, err := s.k8sClient.CoreV1().Pods(nameSpace).List(ctx, metaV1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var usedImages []string
+	for _, item := range list.Items {
+		for _, status := range item.Status.ContainerStatuses {
+			usedImages = append(usedImages, status.Image)
+		}
+	}
+	return usedImages, nil
+}
+
+func (s *K8sService) ListNamespace(ctx context.Context) ([]string, error) {
+	list, err := s.k8sClient.CoreV1().Namespaces().List(ctx, metaV1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var namespaces []string
+	for _, item := range list.Items {
+		namespaces = append(namespaces, item.Name)
+	}
+	return namespaces, nil
 }

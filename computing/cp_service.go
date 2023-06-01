@@ -159,14 +159,14 @@ func RestartJob(c *gin.Context) {
 }
 
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
-	lock.Lock()
-	defer lock.Unlock()
+	//lock.Lock()
+	//defer lock.Unlock()
 
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
-	go func() {
-		buildImageCh <- imageName
-	}()
+	//go func() {
+	//	buildImageCh <- imageName
+	//}()
 	resource, ok := common.HardwareResource[hardware]
 	if !ok {
 		logs.GetLogger().Warnf("not found resource.")

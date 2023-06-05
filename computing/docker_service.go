@@ -302,7 +302,7 @@ func (ds *DockerService) CleanResource() {
 		logs.GetLogger().Errorf("Failed delete unused image, error: %+v", err)
 	}
 
-	if _, err = ds.c.ContainersPrune(ctx, danglingFilters); err != nil {
+	if _, err = ds.c.ContainersPrune(ctx, filters.NewArgs()); err != nil {
 		logs.GetLogger().Errorf("Failed delete unused container, error: %+v", err)
 	}
 }

@@ -151,7 +151,7 @@ cp config.toml.sample config.toml
 [API]
 Port = 8085                                   # The port number that the web server listens on
 MultiAddress = "/ip4/127.0.0.1/tcp/8085"      # The multiAddress for libp2p
-PublicNetworkIp = ""                          # The public network ip
+Domain = ""                          # The public network ip
 
 OPENAI_API_KEY = ""
 RedisUrl = "redis://127.0.0.1:6379"           # The redis server address

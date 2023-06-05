@@ -295,6 +295,8 @@ func (ds *DockerService) RemoveImage(imageId string) error {
 
 func (ds *DockerService) CleanResource() error {
 	ctx := context.Background()
-	_, err := ds.c.ImagesPrune(ctx, filters.NewArgs())
+	danglingFilters := filters.NewArgs()
+	danglingFilters.Add("dangling", "true")
+	_, err := ds.c.ImagesPrune(ctx, danglingFilters)
 	return err
 }

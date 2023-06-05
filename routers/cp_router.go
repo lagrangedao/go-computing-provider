@@ -10,4 +10,5 @@ func CPManager(router *gin.RouterGroup) {
 	router.GET("/host/info", computing.GetServiceProviderInfo)
 	router.POST("/lagrange/jobs", computing.ReceiveJob)
 	router.POST("/lagrange/jobs/restart", computing.RestartJob)
+	router.DELETE("/lagrange/jobs", computing.DeleteJob)
 }

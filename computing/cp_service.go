@@ -154,6 +154,25 @@ func RestartJob(c *gin.Context) {
 	c.JSON(http.StatusOK, jobData)
 }
 
+func DeleteJob(c *gin.Context) {
+	var deleteJobReq models.DeleteJobReq
+	if err := c.ShouldBindJSON(&deleteJobReq); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logs.GetLogger().Infof("Job delete req: %+v", deleteJobReq)
+	if deleteJobReq.CreatorWallet == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
+	}
+	if deleteJobReq.SpaceName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "space_name is required"})
+	}
+
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(deleteJobReq.CreatorWallet)
+	deleteJob(k8sNameSpace, deleteJobReq.SpaceName)
+	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
+}
+
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
@@ -281,7 +300,6 @@ func deleteJob(namespace, spaceName string) {
 		return
 	}
 	for _, imageId := range deployImageIds {
-		println(imageId)
 		err = dockerService.RemoveImage(imageId)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed delete unused image, imageId: %s, error: %+v", imageId, err)
@@ -393,39 +411,6 @@ func WatchExpiredTask() {
 			}
 		}
 	}()
-}
-
-func WatchUnusedImageTask() {
-	ticker := time.NewTicker(10 * time.Minute)
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logs.GetLogger().Errorf("catch panic error: %+v", err)
-			}
-		}()
-
-		for range ticker.C {
-			logs.GetLogger().Infof("Starting clean unsed images...")
-			dockerService := NewDockerService()
-			dockerService.CleanResource()
-		}
-
-	}()
-}
-
-func diffData(allKey, useKey string, allImages, useImages []interface{}) ([]string, error) {
-	conn := redisPool.Get()
-	if _, err := conn.Do("SADD", allImages...); err != nil {
-		return nil, err
-	}
-	if _, err := conn.Do("SADD", useImages...); err != nil {
-		return nil, err
-	}
-	reply, err := redis.Strings(conn.Do("SDIFF", allKey, useKey))
-	if err != nil {
-		return nil, err
-	}
-	return reply, nil
 }
 
 func generateString(length int) string {

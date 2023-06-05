@@ -21,3 +21,8 @@ type JobData struct {
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
 }
+
+type DeleteJobReq struct {
+	CreatorWallet string `json:"creator_wallet"`
+	SpaceName     string `json:"space_name"`
+}

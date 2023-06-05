@@ -293,10 +293,16 @@ func (ds *DockerService) RemoveImage(imageId string) error {
 	return err
 }
 
-func (ds *DockerService) CleanResource() error {
+func (ds *DockerService) CleanResource() {
 	ctx := context.Background()
 	danglingFilters := filters.NewArgs()
 	danglingFilters.Add("dangling", "true")
 	_, err := ds.c.ImagesPrune(ctx, danglingFilters)
-	return err
+	if err != nil {
+		logs.GetLogger().Errorf("Failed delete unused image, error: %+v", err)
+	}
+
+	if _, err = ds.c.ContainersPrune(ctx, danglingFilters); err != nil {
+		logs.GetLogger().Errorf("Failed delete unused container, error: %+v", err)
+	}
 }

@@ -274,6 +274,20 @@ func deleteJob(namespace, spaceName string) {
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", serviceName)
 
+	dockerService := NewDockerService()
+	deployImageIds, err := k8sService.GetDeploymentImages(context.TODO(), namespace, deployName)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get deploy imageIds, deployName: %s, error: %+v", deployName, err)
+		return
+	}
+	for _, imageId := range deployImageIds {
+		err = dockerService.RemoveImage(imageId)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed delete unused image, imageId: %s, error: %+v", imageId, err)
+			continue
+		}
+	}
+
 	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
 		return
@@ -381,7 +395,7 @@ func WatchExpiredTask() {
 }
 
 func WatchUnusedImageTask() {
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(10 * time.Minute)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -392,9 +406,7 @@ func WatchUnusedImageTask() {
 		for range ticker.C {
 			logs.GetLogger().Infof("Starting clean unsed images...")
 			dockerService := NewDockerService()
-			if err := dockerService.CleanResource(); err != nil {
-				logs.GetLogger().Infof("Failed started clean unsed images, error: %+v", err)
-			}
+			dockerService.CleanResource()
 		}
 
 	}()

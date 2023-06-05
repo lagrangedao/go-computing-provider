@@ -216,6 +216,19 @@ func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deployment
 	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
 }
 
+func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
+	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var imageIds []string
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		imageIds = append(imageIds, container.Image)
+	}
+	return imageIds, nil
+}
+
 func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
 	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
 }

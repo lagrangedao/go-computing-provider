@@ -14,7 +14,7 @@ AccessToken = ""                              # Access token applied by lagrange
 [MCS]
 ApiKey = ""                                   # The MCS API_KEY
 AccessToken = ""                              # The MCS API_KEY
-Bucket = ""                                   # The MCS bucket name
+BucketName = ""                               # The MCS bucket name
 Network = "polygon.mainnet"                   # polygon.mainnet for mainnet, polygon.mumbai for testnet
 FileCachePath = ""                            # Cache directory of job task raw data
 

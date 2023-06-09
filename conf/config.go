@@ -34,7 +34,7 @@ type LAD struct {
 type MCS struct {
 	ApiKey        string
 	AccessToken   string
-	Bucket        string
+	BucketName    string
 	Network       string
 	FileCachePath string
 }

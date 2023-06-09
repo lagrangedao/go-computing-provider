@@ -27,7 +27,7 @@ func NewStorageService() *StorageService {
 			McsApiKey:      conf.GetConfig().MCS.ApiKey,
 			McsAccessToken: conf.GetConfig().MCS.AccessToken,
 			NetWork:        conf.GetConfig().MCS.Network,
-			BucketName:     conf.GetConfig().MCS.Bucket,
+			BucketName:     conf.GetConfig().MCS.BucketName,
 		}
 	})
 	mcsClient, err := user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)

@@ -113,10 +113,10 @@ jemalloc-bg-thread yes
 * Run redis service:
 
 ```bash
-docker run -v /youpath/conf:/usr/local/etc/redis -p6379:6379 -d --name myredis redis redis-server /usr/local/etc/redis/redis.conf
+docker run -v /yourpath/conf:/usr/local/etc/redis -p6379:6379 -d --name myredis redis redis-server /usr/local/etc/redis/redis.conf
 ```
 
-**/youpath/conf:**   The local directory path where redis.conf is placed
+**/yourpath/conf:**   The local directory path where redis.conf is placed
 
 ### 2.  Compile go-computing-provider
 
@@ -150,7 +150,7 @@ cp config.toml.sample config.toml
 ```bash
 [API]
 Port = 8085                                   # The port number that the web server listens on
-MultiAddress = "/ip4/127.0.0.1/tcp/8085"      # The multiAddress for libp2p
+MultiAddress = "/ip4/<public_ip>/tcp/<port>"      # The multiAddress for libp2p
 Domain = ""                          # The public network ip
 
 OPENAI_API_KEY = ""

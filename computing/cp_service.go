@@ -219,7 +219,7 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: k8sNameSpace,
 					Labels: map[string]string{
-						"lab-ns": "lagrange-dao",
+						"lab-ns": strings.ToLower(creator),
 					},
 				},
 			}

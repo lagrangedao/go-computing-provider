@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/lagrangedao/go-computing-provider/conf"
 	"io"
 	"log"
 	"net/http"
@@ -103,10 +104,12 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (string, string) {
 			return "", ""
 		}
 
-		//if err := dockerService.PushImage(imageName); err != nil {
-		//	logs.GetLogger().Errorf("Error Docker push image: %v", err)
-		//	return "", ""
-		//}
+		if conf.GetConfig().Registry.UserName != "" {
+			if err := dockerService.PushImage(imageName); err != nil {
+				logs.GetLogger().Errorf("Error Docker push image: %v", err)
+				return "", ""
+			}
+		}
 
 		return imageName, dockerfilePath
 	} else {

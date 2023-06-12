@@ -201,19 +201,43 @@ func (s *K8sService) GetNodeList() (ip string, err error) {
 	return ip, nil
 }
 
-func (s *K8sService) GetPods(namespace string) {
+func (s *K8sService) GetPods(namespace string) (bool, error) {
 	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{})
 	if err != nil {
 		logs.GetLogger().Error(err)
-		return
+		return false, err
 	}
-	for _, pod := range podList.Items {
-		logs.GetLogger().Infof("name: %s, namespace: %s", pod.Name, pod.Namespace)
+	if podList != nil && len(podList.Items) > 0 {
+		return true, nil
 	}
+	return false, nil
 }
 
-func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
-	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
+func (s *K8sService) CreateNetworkPolicy(ctx context.Context, namespace string) (*networkingv1.NetworkPolicy, error) {
+	networkPolicy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      namespace + "-" + generateString(4),
+			Namespace: namespace,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &metaV1.LabelSelector{
+								MatchLabels: map[string]string{
+									"kubernetes.io/metadata.name": "ingress-nginx",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return s.k8sClient.NetworkingV1().NetworkPolicies(namespace).Create(ctx, networkPolicy, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
@@ -239,6 +263,14 @@ func (s *K8sService) CreateNameSpace(ctx context.Context, nameSpace *coreV1.Name
 
 func (s *K8sService) GetNameSpace(ctx context.Context, nameSpace string, opts metaV1.GetOptions) (result *coreV1.Namespace, err error) {
 	return s.k8sClient.CoreV1().Namespaces().Get(ctx, nameSpace, opts)
+}
+
+func (s *K8sService) DeleteNameSpace(ctx context.Context, nameSpace string) error {
+	return s.k8sClient.CoreV1().Namespaces().Delete(ctx, nameSpace, metaV1.DeleteOptions{})
+}
+
+func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
+	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
 }
 
 func (s *K8sService) ListUsedImage(ctx context.Context, nameSpace string) ([]string, error) {

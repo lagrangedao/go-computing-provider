@@ -229,6 +229,13 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 				return
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
+
+			networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
+			if err != nil {
+				logs.GetLogger().Errorf("Failed create networkPolicy, error: %+v", err)
+				return
+			}
+			logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
 		} else {
 			logs.GetLogger().Error(err)
 			return
@@ -408,6 +415,39 @@ func WatchExpiredTask() {
 
 			if cursor == "0" {
 				break
+			}
+		}
+	}()
+}
+
+func WatchNameSpaceForDeleted() {
+	ticker := time.NewTicker(3 * time.Minute)
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("catch panic error: %+v", err)
+			}
+		}()
+
+		for range ticker.C {
+			service := NewK8sService()
+			namespaces, err := service.ListNamespace(context.TODO())
+			if err != nil {
+				logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
+				continue
+			}
+
+			for _, namespace := range namespaces {
+				getPods, err := service.GetPods(namespace)
+				if err != nil {
+					logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+					continue
+				}
+				if !getPods {
+					if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
+						logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+					}
+				}
 			}
 		}
 	}()

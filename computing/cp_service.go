@@ -444,8 +444,10 @@ func WatchNameSpaceForDeleted() {
 					continue
 				}
 				if !getPods {
-					if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
-						logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+					if strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
+						if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
+							logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+						}
 					}
 				}
 			}

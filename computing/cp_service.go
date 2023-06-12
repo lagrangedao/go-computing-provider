@@ -318,7 +318,9 @@ func deleteJob(namespace, spaceName string) {
 		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
 		return
 	}
+
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
+	time.Sleep(20 * time.Second)
 }
 
 func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {

@@ -133,6 +133,7 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 }
 
 func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName, hostName string, port int32) (*networkingv1.Ingress, error) {
+	var ingressClassName = "nginx"
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
@@ -142,6 +143,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 			},
 		},
 		Spec: networkingv1.IngressSpec{
+			IngressClassName: &ingressClassName,
 			Rules: []networkingv1.IngressRule{
 				{
 					Host: hostName,

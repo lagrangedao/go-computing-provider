@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
 	"path/filepath"
 	"sync"
@@ -90,13 +89,13 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 						}},
 						Resources: coreV1.ResourceRequirements{
 							Limits: coreV1.ResourceList{
-								coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
 								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
 							},
 							Requests: coreV1.ResourceList{
-								coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
 								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
 							},
 						},

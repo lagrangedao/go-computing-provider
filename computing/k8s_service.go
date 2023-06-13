@@ -108,11 +108,20 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 }
 
 func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
-	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, *metaV1.NewDeleteOptions(0))
+	deletePropagation := metaV1.DeletePropagationForeground
+	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{
+		PropagationPolicy: &deletePropagation,
+	})
 }
 
 func (s *K8sService) DeletePod(ctx context.Context, namespace, spaceName string) error {
 	return s.k8sClient.CoreV1().Pods(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
+	})
+}
+
+func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceName string) error {
+	return s.k8sClient.CoreV1().ReplicationControllers(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
 		LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
 	})
 }

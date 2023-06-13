@@ -443,7 +443,7 @@ func WatchExpiredTask() {
 }
 
 func WatchNameSpaceForDeleted() {
-	ticker := time.NewTicker(3 * time.Minute)
+	ticker := time.NewTicker(24 * time.Hour)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {

@@ -334,8 +334,13 @@ func deleteJob(namespace, spaceName string) {
 
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
+	var count = 0
 	for {
 		<-ticker.C
+		count++
+		if count >= 20 {
+			break
+		}
 		getPods, err := k8sService.GetPods(namespace, spaceName)
 		if err != nil && !errors.IsNotFound(err) {
 			logs.GetLogger().Errorf("Failed get pods form namespace, namepace: %s, error: %+v", namespace, err)

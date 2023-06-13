@@ -213,6 +213,10 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 	k8sService := NewK8sService()
 	// create namespace
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
+
+	// first delete old resource
+	deleteJob(k8sNameSpace, spaceName)
+
 	if _, err = k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			namespace := &coreV1.Namespace{
@@ -241,9 +245,6 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 			return
 		}
 	}
-
-	// first delete old resource
-	deleteJob(k8sNameSpace, spaceName)
 
 	// create deployment
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, DeploymentReq{

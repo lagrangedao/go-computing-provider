@@ -3,6 +3,7 @@ package computing
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
@@ -107,6 +108,27 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 	return s.k8sClient.AppsV1().Deployments(nameSpace).Create(ctx, deployment, metaV1.CreateOptions{})
 }
 
+func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
+	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, *metaV1.NewDeleteOptions(0))
+}
+
+func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
+	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var imageIds []string
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		imageIds = append(imageIds, container.Image)
+	}
+	return imageIds, nil
+}
+
+func (s *K8sService) GetServiceByName(ctx context.Context, namespace, serviceName string, opts metaV1.GetOptions) (result *coreV1.Service, err error) {
+	return s.k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, opts)
+}
+
 func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName string, containerPort int32) (result *coreV1.Service, err error) {
 	service := &coreV1.Service{
 		TypeMeta: metaV1.TypeMeta{
@@ -130,6 +152,10 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 		},
 	}
 	return s.k8sClient.CoreV1().Services(nameSpace).Create(ctx, service, metaV1.CreateOptions{})
+}
+
+func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
+	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
 }
 
 func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName, hostName string, port int32) (*networkingv1.Ingress, error) {
@@ -177,13 +203,7 @@ func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, ingressName s
 	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Delete(ctx, ingressName, metaV1.DeleteOptions{})
 }
 
-func (s *K8sService) GetServiceByName(ctx context.Context, namespace string,
-	serviceName string, opts metaV1.GetOptions) (result *coreV1.Service, err error) {
-	return s.k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, opts)
-}
-
 func (s *K8sService) GetNodeList() (ip string, err error) {
-	// 获取所有节点的 IP 地址
 	nodes, err := s.k8sClient.CoreV1().Nodes().List(context.Background(), metaV1.ListOptions{})
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -203,8 +223,14 @@ func (s *K8sService) GetNodeList() (ip string, err error) {
 	return ip, nil
 }
 
-func (s *K8sService) GetPods(namespace string) (bool, error) {
-	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{})
+func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {
+	listOption := metaV1.ListOptions{}
+	if spaceName == "" {
+		listOption = metaV1.ListOptions{
+			LabelSelector: fmt.Sprintf("ad_app=%s", spaceName),
+		}
+	}
+	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), listOption)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return false, err
@@ -242,23 +268,6 @@ func (s *K8sService) CreateNetworkPolicy(ctx context.Context, namespace string) 
 	return s.k8sClient.NetworkingV1().NetworkPolicies(namespace).Create(ctx, networkPolicy, metaV1.CreateOptions{})
 }
 
-func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
-	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-
-	var imageIds []string
-	for _, container := range deployment.Spec.Template.Spec.Containers {
-		imageIds = append(imageIds, container.Image)
-	}
-	return imageIds, nil
-}
-
-func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
-	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
-}
-
 func (s *K8sService) CreateNameSpace(ctx context.Context, nameSpace *coreV1.Namespace, opts metaV1.CreateOptions) (result *coreV1.Namespace, err error) {
 	return s.k8sClient.CoreV1().Namespaces().Create(ctx, nameSpace, opts)
 }
@@ -269,10 +278,6 @@ func (s *K8sService) GetNameSpace(ctx context.Context, nameSpace string, opts me
 
 func (s *K8sService) DeleteNameSpace(ctx context.Context, nameSpace string) error {
 	return s.k8sClient.CoreV1().Namespaces().Delete(ctx, nameSpace, metaV1.DeleteOptions{})
-}
-
-func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
-	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
 }
 
 func (s *K8sService) ListUsedImage(ctx context.Context, nameSpace string) ([]string, error) {

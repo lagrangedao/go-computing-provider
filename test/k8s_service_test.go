@@ -13,7 +13,7 @@ import (
 
 func TestNewK8sService(t *testing.T) {
 	service := computing.NewK8sService()
-	service.GetPods("kube-system")
+	service.GetPods("kube-system", "")
 }
 
 func TestGetNodeList(t *testing.T) {

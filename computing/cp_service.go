@@ -320,7 +320,27 @@ func deleteJob(namespace, spaceName string) {
 	}
 
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
-	time.Sleep(20 * time.Second)
+
+	done := make(chan struct{})
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			getPods, err := k8sService.GetPods(namespace, spaceName)
+			if err != nil {
+				logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+				continue
+			}
+			if !getPods {
+				done <- struct{}{}
+				logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceName)
+				return
+			}
+		case <-done:
+			break
+		}
+	}
 }
 
 func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {
@@ -440,7 +460,7 @@ func WatchNameSpaceForDeleted() {
 			}
 
 			for _, namespace := range namespaces {
-				getPods, err := service.GetPods(namespace)
+				getPods, err := service.GetPods(namespace, "")
 				if err != nil {
 					logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
 					continue

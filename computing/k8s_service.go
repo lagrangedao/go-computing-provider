@@ -238,7 +238,7 @@ func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {
 	listOption := metaV1.ListOptions{}
 	if spaceName == "" {
 		listOption = metaV1.ListOptions{
-			LabelSelector: fmt.Sprintf("ad_app=%s", spaceName),
+			LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
 		}
 	}
 	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), listOption)

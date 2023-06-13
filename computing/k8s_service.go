@@ -111,6 +111,12 @@ func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deployment
 	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, *metaV1.NewDeleteOptions(0))
 }
 
+func (s *K8sService) DeletePod(ctx context.Context, namespace, spaceName string) error {
+	return s.k8sClient.CoreV1().Pods(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
+	})
+}
+
 func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
 	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
 	if err != nil {

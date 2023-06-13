@@ -322,13 +322,18 @@ func deleteJob(namespace, spaceName string) {
 
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
-	ticker := time.NewTicker(5 * time.Second)
+	if err := k8sService.DeletePod(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete pods, deployName: %s, error: %+v", deployName, err)
+		return
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	for {
 		<-ticker.C
 		getPods, err := k8sService.GetPods(namespace, spaceName)
 		if err != nil && !errors.IsNotFound(err) {
-			logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+			logs.GetLogger().Errorf("Failed get pods form namespace, namepace: %s, error: %+v", namespace, err)
 			continue
 		}
 		if !getPods {

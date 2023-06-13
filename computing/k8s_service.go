@@ -121,7 +121,7 @@ func (s *K8sService) DeletePod(ctx context.Context, namespace, spaceName string)
 }
 
 func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceName string) error {
-	return s.k8sClient.CoreV1().ReplicationControllers(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
+	return s.k8sClient.AppsV1().ReplicaSets(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
 		LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
 	})
 }

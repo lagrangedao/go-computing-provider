@@ -321,23 +321,17 @@ func deleteJob(namespace, spaceName string) {
 
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
-	done := make(chan struct{})
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
-		select {
-		case <-ticker.C:
-			getPods, err := k8sService.GetPods(namespace, spaceName)
-			if err != nil && !errors.IsNotFound(err) {
-				logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
-				continue
-			}
-			if !getPods {
-				done <- struct{}{}
-				logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceName)
-				return
-			}
-		case <-done:
+		<-ticker.C
+		getPods, err := k8sService.GetPods(namespace, spaceName)
+		if err != nil && !errors.IsNotFound(err) {
+			logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+			continue
+		}
+		if !getPods {
+			logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceName)
 			break
 		}
 	}

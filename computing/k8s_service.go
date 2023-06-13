@@ -236,7 +236,7 @@ func (s *K8sService) GetNodeList() (ip string, err error) {
 
 func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {
 	listOption := metaV1.ListOptions{}
-	if spaceName == "" {
+	if spaceName != "" {
 		listOption = metaV1.ListOptions{
 			LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
 		}

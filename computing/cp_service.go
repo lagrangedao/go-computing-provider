@@ -302,7 +302,7 @@ func deleteJob(namespace, spaceName string) {
 
 	dockerService := NewDockerService()
 	deployImageIds, err := k8sService.GetDeploymentImages(context.TODO(), namespace, deployName)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed get deploy imageIds, deployName: %s, error: %+v", deployName, err)
 		return
 	}
@@ -328,7 +328,7 @@ func deleteJob(namespace, spaceName string) {
 		select {
 		case <-ticker.C:
 			getPods, err := k8sService.GetPods(namespace, spaceName)
-			if err != nil {
+			if err != nil && !errors.IsNotFound(err) {
 				logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
 				continue
 			}

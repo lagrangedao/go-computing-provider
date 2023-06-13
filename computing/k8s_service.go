@@ -108,10 +108,7 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 }
 
 func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
-	deletePropagation := metaV1.DeletePropagationForeground
-	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{
-		PropagationPolicy: &deletePropagation,
-	})
+	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
 }
 
 func (s *K8sService) DeletePod(ctx context.Context, namespace, spaceName string) error {

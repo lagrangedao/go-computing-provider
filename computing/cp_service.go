@@ -319,7 +319,7 @@ func deleteJob(namespace, spaceName string) {
 		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
 		return
 	}
-
+	time.Sleep(6 * time.Second)
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
 	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {

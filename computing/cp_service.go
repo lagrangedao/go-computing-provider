@@ -213,6 +213,10 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 	k8sService := NewK8sService()
 	// create namespace
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
+
+	// first delete old resource
+	deleteJob(k8sNameSpace, spaceName)
+
 	if _, err = k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			namespace := &coreV1.Namespace{
@@ -229,14 +233,18 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 				return
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
+
+			//networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
+			//if err != nil {
+			//	logs.GetLogger().Errorf("Failed create networkPolicy, error: %+v", err)
+			//	return
+			//}
+			//logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
 		} else {
 			logs.GetLogger().Error(err)
 			return
 		}
 	}
-
-	// first delete old resource
-	deleteJob(k8sNameSpace, spaceName)
 
 	// create deployment
 	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, DeploymentReq{
@@ -295,7 +303,7 @@ func deleteJob(namespace, spaceName string) {
 
 	dockerService := NewDockerService()
 	deployImageIds, err := k8sService.GetDeploymentImages(context.TODO(), namespace, deployName)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed get deploy imageIds, deployName: %s, error: %+v", deployName, err)
 		return
 	}
@@ -311,7 +319,38 @@ func deleteJob(namespace, spaceName string) {
 		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
 		return
 	}
+	time.Sleep(6 * time.Second)
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
+
+	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete eplicationController, spaceName: %s, error: %+v", spaceName, err)
+		return
+	}
+
+	if err := k8sService.DeletePod(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete pods, spaceName: %s, error: %+v", spaceName, err)
+		return
+	}
+
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	var count = 0
+	for {
+		<-ticker.C
+		count++
+		if count >= 20 {
+			break
+		}
+		getPods, err := k8sService.GetPods(namespace, spaceName)
+		if err != nil && !errors.IsNotFound(err) {
+			logs.GetLogger().Errorf("Failed get pods form namespace, namepace: %s, error: %+v", namespace, err)
+			continue
+		}
+		if !getPods {
+			logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceName)
+			break
+		}
+	}
 }
 
 func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {
@@ -408,6 +447,39 @@ func WatchExpiredTask() {
 
 			if cursor == "0" {
 				break
+			}
+		}
+	}()
+}
+
+func WatchNameSpaceForDeleted() {
+	ticker := time.NewTicker(24 * time.Hour)
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("catch panic error: %+v", err)
+			}
+		}()
+
+		for range ticker.C {
+			service := NewK8sService()
+			namespaces, err := service.ListNamespace(context.TODO())
+			if err != nil {
+				logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
+				continue
+			}
+
+			for _, namespace := range namespaces {
+				getPods, err := service.GetPods(namespace, "")
+				if err != nil {
+					logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+					continue
+				}
+				if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
+					if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
+						logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+					}
+				}
 			}
 		}
 	}()

@@ -3,8 +3,8 @@ package computing
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"net"
 	"path/filepath"
 	"sync"
@@ -89,13 +89,13 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 						}},
 						Resources: coreV1.ResourceRequirements{
 							Limits: coreV1.ResourceList{
-								coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
 								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
 							},
 							Requests: coreV1.ResourceList{
-								coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
 								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
 							},
 						},
@@ -105,6 +105,39 @@ func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, dep
 		}}
 
 	return s.k8sClient.AppsV1().Deployments(nameSpace).Create(ctx, deployment, metaV1.CreateOptions{})
+}
+
+func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
+	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
+}
+
+func (s *K8sService) DeletePod(ctx context.Context, namespace, spaceName string) error {
+	return s.k8sClient.CoreV1().Pods(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
+	})
+}
+
+func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceName string) error {
+	return s.k8sClient.AppsV1().ReplicaSets(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
+	})
+}
+
+func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
+	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	var imageIds []string
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		imageIds = append(imageIds, container.Image)
+	}
+	return imageIds, nil
+}
+
+func (s *K8sService) GetServiceByName(ctx context.Context, namespace, serviceName string, opts metaV1.GetOptions) (result *coreV1.Service, err error) {
+	return s.k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, opts)
 }
 
 func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName string, containerPort int32) (result *coreV1.Service, err error) {
@@ -132,7 +165,12 @@ func (s *K8sService) CreateService(ctx context.Context, nameSpace, spaceName str
 	return s.k8sClient.CoreV1().Services(nameSpace).Create(ctx, service, metaV1.CreateOptions{})
 }
 
+func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
+	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
+}
+
 func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName, hostName string, port int32) (*networkingv1.Ingress, error) {
+	var ingressClassName = "nginx"
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
@@ -142,6 +180,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 			},
 		},
 		Spec: networkingv1.IngressSpec{
+			IngressClassName: &ingressClassName,
 			Rules: []networkingv1.IngressRule{
 				{
 					Host: hostName,
@@ -175,13 +214,7 @@ func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, ingressName s
 	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Delete(ctx, ingressName, metaV1.DeleteOptions{})
 }
 
-func (s *K8sService) GetServiceByName(ctx context.Context, namespace string,
-	serviceName string, opts metaV1.GetOptions) (result *coreV1.Service, err error) {
-	return s.k8sClient.CoreV1().Services(namespace).Get(ctx, serviceName, opts)
-}
-
 func (s *K8sService) GetNodeList() (ip string, err error) {
-	// 获取所有节点的 IP 地址
 	nodes, err := s.k8sClient.CoreV1().Nodes().List(context.Background(), metaV1.ListOptions{})
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -201,36 +234,49 @@ func (s *K8sService) GetNodeList() (ip string, err error) {
 	return ip, nil
 }
 
-func (s *K8sService) GetPods(namespace string) {
-	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{})
+func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {
+	listOption := metaV1.ListOptions{}
+	if spaceName != "" {
+		listOption = metaV1.ListOptions{
+			LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
+		}
+	}
+	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), listOption)
 	if err != nil {
 		logs.GetLogger().Error(err)
-		return
+		return false, err
 	}
-	for _, pod := range podList.Items {
-		logs.GetLogger().Infof("name: %s, namespace: %s", pod.Name, pod.Namespace)
+	if podList != nil && len(podList.Items) > 0 {
+		return true, nil
 	}
+	return false, nil
 }
 
-func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
-	return s.k8sClient.AppsV1().Deployments(namespace).Delete(ctx, deploymentName, metaV1.DeleteOptions{})
-}
-
-func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
-	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
-	if err != nil {
-		return nil, err
+func (s *K8sService) CreateNetworkPolicy(ctx context.Context, namespace string) (*networkingv1.NetworkPolicy, error) {
+	networkPolicy := &networkingv1.NetworkPolicy{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      namespace + "-" + generateString(4),
+			Namespace: namespace,
+		},
+		Spec: networkingv1.NetworkPolicySpec{
+			PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			Ingress: []networkingv1.NetworkPolicyIngressRule{
+				{
+					From: []networkingv1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &metaV1.LabelSelector{
+								MatchLabels: map[string]string{
+									"kubernetes.io/metadata.name": "ingress-nginx",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
-	var imageIds []string
-	for _, container := range deployment.Spec.Template.Spec.Containers {
-		imageIds = append(imageIds, container.Image)
-	}
-	return imageIds, nil
-}
-
-func (s *K8sService) DeleteService(ctx context.Context, namespace, serviceName string) error {
-	return s.k8sClient.CoreV1().Services(namespace).Delete(ctx, serviceName, metaV1.DeleteOptions{})
+	return s.k8sClient.NetworkingV1().NetworkPolicies(namespace).Create(ctx, networkPolicy, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) CreateNameSpace(ctx context.Context, nameSpace *coreV1.Namespace, opts metaV1.CreateOptions) (result *coreV1.Namespace, err error) {
@@ -239,6 +285,10 @@ func (s *K8sService) CreateNameSpace(ctx context.Context, nameSpace *coreV1.Name
 
 func (s *K8sService) GetNameSpace(ctx context.Context, nameSpace string, opts metaV1.GetOptions) (result *coreV1.Namespace, err error) {
 	return s.k8sClient.CoreV1().Namespaces().Get(ctx, nameSpace, opts)
+}
+
+func (s *K8sService) DeleteNameSpace(ctx context.Context, nameSpace string) error {
+	return s.k8sClient.CoreV1().Namespaces().Delete(ctx, nameSpace, metaV1.DeleteOptions{})
 }
 
 func (s *K8sService) ListUsedImage(ctx context.Context, nameSpace string) ([]string, error) {

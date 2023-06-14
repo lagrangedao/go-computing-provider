@@ -234,12 +234,12 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
 
-			networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
-			if err != nil {
-				logs.GetLogger().Errorf("Failed create networkPolicy, error: %+v", err)
-				return
-			}
-			logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
+			//networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
+			//if err != nil {
+			//	logs.GetLogger().Errorf("Failed create networkPolicy, error: %+v", err)
+			//	return
+			//}
+			//logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
 		} else {
 			logs.GetLogger().Error(err)
 			return

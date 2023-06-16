@@ -312,7 +312,7 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 	for _, resource := range containerResources {
 		for i, envVar := range resource.Env {
 			if strings.Contains(envVar.Name, "NEXTAUTH_URL") {
-				resource.Env[i].Value = hostName
+				resource.Env[i].Value = "http://" + hostName
 				break
 			}
 		}

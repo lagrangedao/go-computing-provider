@@ -13,6 +13,8 @@ require (
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.3.0
 	github.com/itsjamie/gin-cors v0.0.0-20220228161158-ef28d3d2a0a8
+	gopkg.in/errgo.v2 v2.1.0
+	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.25.9
 	k8s.io/apimachinery v0.25.9
 	k8s.io/client-go v0.25.9
@@ -105,7 +107,6 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.70.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20220803162953-67bda5d908f1 // indirect

@@ -58,53 +58,8 @@ func NewK8sService() *K8sService {
 	}
 }
 
-func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, deploy DeploymentReq) (result *appV1.Deployment, err error) {
-	deployment := &appV1.Deployment{
-		TypeMeta: metaV1.TypeMeta{
-			Kind:       "Deployment",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      deploy.DeployName,
-			Namespace: nameSpace,
-		},
-		Spec: appV1.DeploymentSpec{
-			Selector: &metaV1.LabelSelector{
-				MatchLabels: deploy.Label,
-			},
-
-			Template: coreV1.PodTemplateSpec{
-				ObjectMeta: metaV1.ObjectMeta{
-					Labels:    deploy.Label,
-					Namespace: nameSpace,
-				},
-
-				Spec: coreV1.PodSpec{
-					Containers: []coreV1.Container{{
-						Name:            deploy.ContainerName,
-						Image:           deploy.ImageName,
-						ImagePullPolicy: coreV1.PullIfNotPresent,
-						Ports: []coreV1.ContainerPort{{
-							ContainerPort: deploy.ContainerPort,
-						}},
-						Resources: coreV1.ResourceRequirements{
-							Limits: coreV1.ResourceList{
-								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
-								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-							},
-							Requests: coreV1.ResourceList{
-								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
-								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-							},
-						},
-					}},
-				},
-			},
-		}}
-
-	return s.k8sClient.AppsV1().Deployments(nameSpace).Create(ctx, deployment, metaV1.CreateOptions{})
+func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, deploy *appV1.Deployment) (result *appV1.Deployment, err error) {
+	return s.k8sClient.AppsV1().Deployments(nameSpace).Create(ctx, deploy, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
@@ -175,7 +130,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class":           "nginx",
+				//"kubernetes.io/ingress.class":           "nginx",
 				"nginx.ingress.kubernetes.io/use-regex": "true",
 			},
 		},

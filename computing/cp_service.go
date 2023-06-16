@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/lagrangedao/go-computing-provider/docker"
+	"github.com/lagrangedao/go-computing-provider/yaml"
+	appV1 "k8s.io/api/apps/v1"
 	"math/rand"
 	"net/http"
 	"os"
@@ -175,16 +178,26 @@ func DeleteJob(c *gin.Context) {
 
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
-	imageName, dockerfilePath := BuildSpaceTaskImage(spaceName, jobSourceURI)
-	resource, ok := common.HardwareResource[hardware]
-	if !ok {
-		logs.GetLogger().Warnf("not found resource.")
+	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, jobSourceURI)
+	if err != nil {
+		logs.GetLogger().Error(err)
 		return ""
 	}
+
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
 	hostName := hostPrefix + conf.GetConfig().API.Domain
-	runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
+	if containsYaml {
+		yamlToK8s(creator, spaceName, yamlPath, hostName, duration)
+	} else {
+		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
+		resource, ok := common.HardwareResource[hardware]
+		if !ok {
+			logs.GetLogger().Warnf("not found resource.")
+			return ""
+		}
+		dockerfileToK8s(hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
+	}
 	return hostName
 }
 
@@ -198,8 +211,8 @@ type DeploymentReq struct {
 	Res           common.Resource
 }
 
-func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
-	exposedPort, err := ExtractExposedPort(dockerfilePath)
+func dockerfileToK8s(hostName, creatorWallet, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
+	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
 		return
@@ -210,27 +223,164 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 		return
 	}
 
-	k8sService := NewK8sService()
-	// create namespace
-	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creator)
-
 	// first delete old resource
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
 	deleteJob(k8sNameSpace, spaceName)
 
-	if _, err = k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
+	if err := deployNamespace(creatorWallet); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	// create deployment
+	k8sService := NewK8sService()
+	deployment := &appV1.Deployment{
+		TypeMeta: metaV1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
+			Namespace: k8sNameSpace,
+		},
+		Spec: appV1.DeploymentSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"lad_app": spaceName},
+			},
+
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels:    map[string]string{"lad_app": spaceName},
+					Namespace: k8sNameSpace,
+				},
+
+				Spec: coreV1.PodSpec{
+					Containers: []coreV1.Container{{
+						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
+						Image:           imageName,
+						ImagePullPolicy: coreV1.PullIfNotPresent,
+						Ports: []coreV1.ContainerPort{{
+							ContainerPort: int32(containerPort),
+						}},
+						Resources: coreV1.ResourceRequirements{
+							Limits: coreV1.ResourceList{
+								//coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								//coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+							},
+							Requests: coreV1.ResourceList{
+								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
+								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+							},
+						},
+					}},
+				},
+			},
+		}}
+	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, deployment)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+
+	if err := deployK8sResource(k8sNameSpace, spaceName, hostName, containerPort); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	// watch running time and release resources when expired
+	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, int64(duration))
+	return
+}
+
+func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int) {
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
+	deleteJob(k8sNameSpace, spaceName)
+
+	containerResources, err := yaml.HandlerYaml(yamlPath)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	if err := deployNamespace(creatorWallet); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+	for _, resource := range containerResources {
+		deployment := &appV1.Deployment{
+			TypeMeta: metaV1.TypeMeta{
+				Kind:       "Deployment",
+				APIVersion: "apps/v1",
+			},
+			ObjectMeta: metaV1.ObjectMeta{
+				Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
+				Namespace: k8sNameSpace,
+			},
+
+			Spec: appV1.DeploymentSpec{
+				Selector: &metaV1.LabelSelector{
+					MatchLabels: map[string]string{"lad_app": spaceName},
+				},
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: metaV1.ObjectMeta{
+						Labels:    map[string]string{"lad_app": spaceName},
+						Namespace: k8sNameSpace,
+					},
+					Spec: coreV1.PodSpec{
+						Containers: []coreV1.Container{{
+							Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
+							Image:           resource.ImageName,
+							Command:         resource.Command,
+							Args:            resource.Args,
+							Env:             resource.Env,
+							Ports:           resource.Ports,
+							ImagePullPolicy: coreV1.PullIfNotPresent,
+							Resources:       coreV1.ResourceRequirements{
+								//Limits:   resource.ResourceLimit,
+								//Requests: resource.ResourceLimit,
+							},
+						}},
+					},
+				},
+			}}
+		k8sService := NewK8sService()
+		createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, deployment)
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+
+		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(resource.Ports[0].ContainerPort)); err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+
+		// watch running time and release resources when expired
+		watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, int64(duration))
+	}
+}
+
+func deployNamespace(creatorWallet string) error {
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
+	k8sService := NewK8sService()
+	// create namespace
+	if _, err := k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
 		if errors.IsNotFound(err) {
 			namespace := &coreV1.Namespace{
 				ObjectMeta: metaV1.ObjectMeta{
 					Name: k8sNameSpace,
 					Labels: map[string]string{
-						"lab-ns": strings.ToLower(creator),
+						"lab-ns": creatorWallet,
 					},
 				},
 			}
 			createdNamespace, err := k8sService.CreateNameSpace(context.TODO(), namespace, metaV1.CreateOptions{})
 			if err != nil {
-				logs.GetLogger().Errorf("Failed create namespace, error: %+v", err)
-				return
+				return fmt.Errorf("failed create namespace, error: %w", err)
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
 
@@ -241,46 +391,29 @@ func runContainerToK8s(hostName, creator, spaceName, imageName, dockerfilePath s
 			//}
 			//logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
 		} else {
-			logs.GetLogger().Error(err)
-			return
+			return err
 		}
 	}
+	return nil
+}
 
-	// create deployment
-	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, DeploymentReq{
-		NameSpace:     k8sNameSpace,
-		DeployName:    constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
-		ContainerName: constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
-		ImageName:     imageName,
-		Label:         map[string]string{"lad_app": spaceName},
-		ContainerPort: int32(containerPort),
-		Res:           res,
-	})
-	if err != nil {
-		logs.GetLogger().Error(err)
-		return
-	}
-	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+func deployK8sResource(k8sNameSpace, spaceName, hostName string, containerPort int64) error {
+	k8sService := NewK8sService()
 
 	// create service
 	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceName, int32(containerPort))
 	if err != nil {
-		logs.GetLogger().Error(err)
-		return
+		return fmt.Errorf("failed creata service, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
 	// create ingress
 	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceName, hostName, int32(containerPort))
 	if err != nil {
-		logs.GetLogger().Error(err)
-		return
+		return fmt.Errorf("failed creata ingress, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
-
-	// watch running time and release resources when expired
-	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, int64(duration))
-	return
+	return nil
 }
 
 func deleteJob(namespace, spaceName string) {
@@ -301,7 +434,7 @@ func deleteJob(namespace, spaceName string) {
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", serviceName)
 
-	dockerService := NewDockerService()
+	dockerService := docker.NewDockerService()
 	deployImageIds, err := k8sService.GetDeploymentImages(context.TODO(), namespace, deployName)
 	if err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed get deploy imageIds, deployName: %s, error: %+v", deployName, err)

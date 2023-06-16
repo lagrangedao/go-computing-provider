@@ -155,7 +155,7 @@ func downloadFile(filepath string, url string) error {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return fmt.Errorf("url: %s, unexpected status code: %d", url, resp.StatusCode)
 	}
 
 	_, err = io.Copy(out, resp.Body)

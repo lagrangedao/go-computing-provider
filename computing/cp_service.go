@@ -310,6 +310,13 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 		return
 	}
 	for _, resource := range containerResources {
+		for i, envVar := range resource.Env {
+			if strings.Contains(envVar.Name, "NEXTAUTH_URL") {
+				resource.Env[i].Value = hostName
+				break
+			}
+		}
+
 		deployment := &appV1.Deployment{
 			TypeMeta: metaV1.TypeMeta{
 				Kind:       "Deployment",

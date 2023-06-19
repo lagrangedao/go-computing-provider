@@ -425,11 +425,11 @@ func deployNamespace(creatorWallet string) error {
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
 
-			//networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
-			//if err != nil {
-			//	return fmt.Errorf("failed create networkPolicy, error: %w", err)
-			//}
-			//logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
+			networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
+			if err != nil {
+				return fmt.Errorf("failed create networkPolicy, error: %w", err)
+			}
+			logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
 		} else {
 			return err
 		}

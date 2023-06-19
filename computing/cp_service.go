@@ -309,11 +309,43 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 		logs.GetLogger().Error(err)
 		return
 	}
+
+	k8sService := NewK8sService()
 	for _, resource := range containerResources {
 		for i, envVar := range resource.Env {
 			if strings.Contains(envVar.Name, "NEXTAUTH_URL") {
 				resource.Env[i].Value = "http://" + hostName
 				break
+			}
+		}
+
+		var volumeMount []coreV1.VolumeMount
+		var volumes []coreV1.Volume
+		if resource.VolumeMounts.Path != "" {
+			fileNameWithoutExt := filepath.Base(resource.VolumeMounts.Name[:len(resource.VolumeMounts.Name)-len(filepath.Ext(resource.VolumeMounts.Name))])
+			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceName, filepath.Dir(yamlPath), resource.VolumeMounts.Name)
+			if err != nil {
+				logs.GetLogger().Error(err)
+				return
+			}
+			configName := configMap.GetName()
+			volumes = []coreV1.Volume{
+				{
+					Name: spaceName + "-" + fileNameWithoutExt,
+					VolumeSource: coreV1.VolumeSource{
+						ConfigMap: &coreV1.ConfigMapVolumeSource{
+							LocalObjectReference: coreV1.LocalObjectReference{
+								Name: configName,
+							},
+						},
+					},
+				},
+			}
+			volumeMount = []coreV1.VolumeMount{
+				{
+					Name:      spaceName + "-" + fileNameWithoutExt,
+					MountPath: resource.VolumeMounts.Path,
+				},
 			}
 		}
 
@@ -349,11 +381,13 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 								//Limits:   resource.ResourceLimit,
 								//Requests: resource.ResourceLimit,
 							},
+							VolumeMounts: volumeMount,
 						}},
+						Volumes: volumes,
 					},
 				},
 			}}
-		k8sService := NewK8sService()
+
 		createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, deployment)
 		if err != nil {
 			logs.GetLogger().Error(err)

@@ -15,6 +15,12 @@ type ContainerResource struct {
 	Env           []corev1.EnvVar
 	Ports         []corev1.ContainerPort
 	ResourceLimit corev1.ResourceList
+	VolumeMounts  ConfigFile
+}
+
+type ConfigFile struct {
+	Name string
+	Path string
 }
 
 type Parser interface {

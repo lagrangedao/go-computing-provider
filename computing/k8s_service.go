@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"net"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -130,7 +131,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class":           "nginx",
+				//"kubernetes.io/ingress.class":           "nginx",
 				"nginx.ingress.kubernetes.io/use-regex": "true",
 			},
 		},
@@ -187,6 +188,27 @@ func (s *K8sService) GetNodeList() (ip string, err error) {
 		}
 	}
 	return ip, nil
+}
+
+func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceName, basePath, configName string) (*coreV1.ConfigMap, error) {
+	configFilePath := filepath.Join(basePath, configName)
+
+	fileNameWithoutExt := filepath.Base(configName[:len(configName)-len(filepath.Ext(configName))])
+
+	iniData, err := os.ReadFile(configFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	configMap := &coreV1.ConfigMap{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: spaceName + "-" + fileNameWithoutExt + "-" + generateString(4),
+		},
+		Data: map[string]string{
+			configName: string(iniData),
+		},
+	}
+	return s.k8sClient.CoreV1().ConfigMaps(k8sNameSpace).Create(ctx, configMap, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {

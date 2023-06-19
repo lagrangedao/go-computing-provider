@@ -57,6 +57,13 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 				}
 				container.Ports = ports
 			}
+
+			if service.Config.Name != "" && service.Config.Path != "" {
+				container.VolumeMounts = ConfigFile{
+					Name: service.Config.Name,
+					Path: service.Config.Path,
+				}
+			}
 		}
 
 		var resourceList = make(corev1.ResourceList)
@@ -85,6 +92,10 @@ type Service struct {
 	Args    []string `yaml:"args"`
 	Env     []string `yaml:"env"`
 	Expose  []Expose `yaml:"expose"`
+	Config  struct {
+		Name string `yaml:"name"`
+		Path string `yaml:"path"`
+	} `yaml:"config"`
 }
 
 type Expose struct {

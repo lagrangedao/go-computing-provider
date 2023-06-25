@@ -8,6 +8,7 @@ import (
 )
 
 type ContainerResource struct {
+	Name          string
 	Count         int
 	ImageName     string
 	Command       []string
@@ -16,6 +17,8 @@ type ContainerResource struct {
 	Ports         []corev1.ContainerPort
 	ResourceLimit corev1.ResourceList
 	VolumeMounts  ConfigFile
+	Depends       []ContainerResource
+	ReadyCmd      []string
 }
 
 type ConfigFile struct {

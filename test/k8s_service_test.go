@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/computing"
 	"github.com/lagrangedao/go-computing-provider/docker"
+	"github.com/lagrangedao/go-computing-provider/yaml"
 	"io"
 	"log"
 	"os"
@@ -113,5 +114,9 @@ func TestNewStorageService(t *testing.T) {
 }
 
 func TestYamlToK8s(t *testing.T) {
-	//computing.YamlToK8s("my-long", "0x123asdadadqwqw", "demo-123.com", 300)
+	containerResources, err := yaml.HandlerYaml("/Users/sonic/Documents/python_space/go-computing-provider/CodiMD.yaml")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Printf("%+v", containerResources)
 }

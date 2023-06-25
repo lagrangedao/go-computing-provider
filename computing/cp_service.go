@@ -349,6 +349,47 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 			}
 		}
 
+		var containers []coreV1.Container
+		for _, depend := range resource.Depends {
+			var handler = new(coreV1.ExecAction)
+			handler.Command = depend.ReadyCmd
+			containers = append(containers, coreV1.Container{
+				Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + depend.Name,
+				Image:           depend.ImageName,
+				Command:         depend.Command,
+				Args:            depend.Args,
+				Env:             depend.Env,
+				Ports:           depend.Ports,
+				ImagePullPolicy: coreV1.PullIfNotPresent,
+				Resources:       coreV1.ResourceRequirements{
+					//Limits:   resource.ResourceLimit,
+					//Requests: resource.ResourceLimit,
+				},
+				ReadinessProbe: &coreV1.Probe{
+					ProbeHandler: coreV1.ProbeHandler{
+						Exec: handler,
+					},
+					InitialDelaySeconds: 5,
+					PeriodSeconds:       5,
+				},
+			})
+		}
+
+		containers = append(containers, coreV1.Container{
+			Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + resource.Name,
+			Image:           resource.ImageName,
+			Command:         resource.Command,
+			Args:            resource.Args,
+			Env:             resource.Env,
+			Ports:           resource.Ports,
+			ImagePullPolicy: coreV1.PullIfNotPresent,
+			Resources:       coreV1.ResourceRequirements{
+				//Limits:   resource.ResourceLimit,
+				//Requests: resource.ResourceLimit,
+			},
+			VolumeMounts: volumeMount,
+		})
+
 		deployment := &appV1.Deployment{
 			TypeMeta: metaV1.TypeMeta{
 				Kind:       "Deployment",
@@ -369,21 +410,8 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 						Namespace: k8sNameSpace,
 					},
 					Spec: coreV1.PodSpec{
-						Containers: []coreV1.Container{{
-							Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
-							Image:           resource.ImageName,
-							Command:         resource.Command,
-							Args:            resource.Args,
-							Env:             resource.Env,
-							Ports:           resource.Ports,
-							ImagePullPolicy: coreV1.PullIfNotPresent,
-							Resources:       coreV1.ResourceRequirements{
-								//Limits:   resource.ResourceLimit,
-								//Requests: resource.ResourceLimit,
-							},
-							VolumeMounts: volumeMount,
-						}},
-						Volumes: volumes,
+						Containers: containers,
+						Volumes:    volumes,
 					},
 				},
 			}}

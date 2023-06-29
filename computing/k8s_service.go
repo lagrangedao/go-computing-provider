@@ -133,7 +133,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
-				//"kubernetes.io/ingress.class":           "nginx",
+				"kubernetes.io/ingress.class":           "nginx",
 				"nginx.ingress.kubernetes.io/use-regex": "true",
 			},
 		},

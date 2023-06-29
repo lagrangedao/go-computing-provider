@@ -5,9 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"net"
+	"github.com/lagrangedao/go-computing-provider/models"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	appV1 "k8s.io/api/apps/v1"
@@ -131,7 +133,7 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class":           "nginx",
+				//"kubernetes.io/ingress.class":           "nginx",
 				"nginx.ingress.kubernetes.io/use-regex": "true",
 			},
 		},
@@ -170,24 +172,45 @@ func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, ingressName s
 	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Delete(ctx, ingressName, metaV1.DeleteOptions{})
 }
 
-func (s *K8sService) GetNodeList() (ip string, err error) {
+func (s *K8sService) GetNodeList() (map[string]models.NodeResource, error) {
+	nodeResourceMap := make(map[string]models.NodeResource)
 	nodes, err := s.k8sClient.CoreV1().Nodes().List(context.Background(), metaV1.ListOptions{})
 	if err != nil {
 		logs.GetLogger().Error(err)
-		return "", err
+		return nil, err
 	}
 
 	for _, node := range nodes.Items {
-		for _, addr := range node.Status.Addresses {
-			if addr.Type == coreV1.NodeInternalIP {
-				ipAddr := net.ParseIP(addr.Address)
-				if ipAddr != nil {
-					ip = ipAddr.String()
+		var source models.NodeResource
+		for label, v := range node.Labels {
+			switch label {
+			case "nvidia.com/gpu.product":
+				source.Gpu.TypeName = v
+			case "nvidia.com/gpu.count":
+				count, err := strconv.Atoi(v)
+				if err != nil {
+					logs.GetLogger().Error(err)
+					count = 0
 				}
+				source.Gpu.Count = count
+			case "nvidia.com/gpu.memory":
+				mem, err := strconv.Atoi(v)
+				if err != nil {
+					logs.GetLogger().Error(err)
+					mem = 0
+				}
+				source.Gpu.Memory = mem
+			case "feature.node.kubernetes.io/cpu-model.vendor_id":
+				source.Cpu.TypeName = v
 			}
 		}
+
+		source.Cpu.Count = node.Status.Capacity.Cpu().Value()
+		source.MemoryTotal = node.Status.Capacity.Memory().Value()
+		source.StorageTotal = node.Status.Capacity.Storage().Value()
+		nodeResourceMap[node.Name] = source
 	}
-	return ip, nil
+	return nodeResourceMap, nil
 }
 
 func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceName, basePath, configName string) (*coreV1.ConfigMap, error) {
@@ -294,4 +317,12 @@ func (s *K8sService) ListNamespace(ctx context.Context) ([]string, error) {
 		namespaces = append(namespaces, item.Name)
 	}
 	return namespaces, nil
+}
+
+func generateLabel(name string) map[string]string {
+	var labels = make(map[string]string)
+	if strings.Contains(name, "NVIDIA") {
+		labels["nvidia.com/gpu.product"] = name
+	}
+	return labels
 }

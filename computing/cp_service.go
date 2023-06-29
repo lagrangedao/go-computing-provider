@@ -7,6 +7,7 @@ import (
 	"github.com/lagrangedao/go-computing-provider/docker"
 	"github.com/lagrangedao/go-computing-provider/yaml"
 	appV1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
 	"net/http"
 	"os"
@@ -255,6 +256,7 @@ func dockerfileToK8s(hostName, creatorWallet, spaceName, imageName, dockerfilePa
 				},
 
 				Spec: coreV1.PodSpec{
+					//NodeSelector: generateLabel(""),
 					Containers: []coreV1.Container{{
 						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
 						Image:           imageName,
@@ -266,12 +268,12 @@ func dockerfileToK8s(hostName, creatorWallet, spaceName, imageName, dockerfilePa
 							Limits: coreV1.ResourceList{
 								//coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
 								//coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
-								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(1, resource.DecimalSI),
 							},
 							Requests: coreV1.ResourceList{
 								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
 								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
-								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(1, resource.DecimalSI),
 							},
 						},
 					}},

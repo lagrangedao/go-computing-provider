@@ -91,7 +91,7 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 							}
 							if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
 								resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
-								resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
+								//resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
 								container.GpuModel = cpRs.Resources.Gpu.Model
 							}
 						}
@@ -163,7 +163,7 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 				}
 				if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
 					resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
-					resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
+					//resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
 					containerNew.GpuModel = cpRs.Resources.Gpu.Model
 				}
 			}

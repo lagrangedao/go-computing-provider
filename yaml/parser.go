@@ -19,6 +19,7 @@ type ContainerResource struct {
 	VolumeMounts  ConfigFile
 	Depends       []ContainerResource
 	ReadyCmd      []string
+	GpuModel      string
 }
 
 type ConfigFile struct {

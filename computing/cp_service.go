@@ -268,12 +268,10 @@ func dockerfileToK8s(hostName, creatorWallet, spaceName, imageName, dockerfilePa
 							Limits: coreV1.ResourceList{
 								//coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
 								//coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
-								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(1, resource.DecimalSI),
 							},
 							Requests: coreV1.ResourceList{
 								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
 								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
-								coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(1, resource.DecimalSI),
 							},
 						},
 					}},
@@ -363,9 +361,9 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 				Env:             depend.Env,
 				Ports:           depend.Ports,
 				ImagePullPolicy: coreV1.PullIfNotPresent,
-				Resources:       coreV1.ResourceRequirements{
-					//Limits:   resource.ResourceLimit,
-					//Requests: resource.ResourceLimit,
+				Resources: coreV1.ResourceRequirements{
+					Limits:   resource.ResourceLimit,
+					Requests: resource.ResourceLimit,
 				},
 				ReadinessProbe: &coreV1.Probe{
 					ProbeHandler: coreV1.ProbeHandler{
@@ -698,4 +696,9 @@ func generateString(length int) string {
 		result[i] = source[rand.Intn(len(source))]
 	}
 	return string(result)
+}
+
+func resourceQuantity(quantity string) *resource.Quantity {
+	q, _ := resource.ParseQuantity(quantity)
+	return &q
 }

@@ -85,6 +85,16 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 						if cpRs.Resources.Storage.Size != "" {
 							resourceList[corev1.ResourceStorage] = resource.MustParse(cpRs.Resources.Storage.Size)
 						}
+						if cpRs.Resources.Gpu.Model != "" {
+							if strings.Contains(cpRs.Resources.Gpu.Model, "amd") {
+
+							}
+							if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
+								resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
+								resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
+								container.GpuModel = cpRs.Resources.Gpu.Model
+							}
+						}
 					}
 
 					if len(service.ReadyCmd) > 0 {
@@ -145,6 +155,17 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 			}
 			if cpRs.Resources.Storage.Size != "" {
 				resourceList[corev1.ResourceStorage] = resource.MustParse(cpRs.Resources.Storage.Size)
+			}
+
+			if cpRs.Resources.Gpu.Model != "" {
+				if strings.Contains(cpRs.Resources.Gpu.Model, "amd") {
+
+				}
+				if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
+					resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
+					resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
+					containerNew.GpuModel = cpRs.Resources.Gpu.Model
+				}
 			}
 		}
 		containerNew.ResourceLimit = resourceList
@@ -208,6 +229,11 @@ type Compute struct {
 		Storage struct {
 			Size string `yaml:"size"`
 		} `yaml:"storage"`
+		Gpu struct {
+			Model string `yaml:"model"`
+			Units string `yaml:"units"`
+			Size  string `yaml:"size"`
+		} `yaml:"gpu"`
 	} `yaml:"resources"`
 }
 

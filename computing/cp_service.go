@@ -383,9 +383,9 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 			Env:             resource.Env,
 			Ports:           resource.Ports,
 			ImagePullPolicy: coreV1.PullIfNotPresent,
-			Resources:       coreV1.ResourceRequirements{
-				//Limits:   resource.ResourceLimit,
-				//Requests: resource.ResourceLimit,
+			Resources: coreV1.ResourceRequirements{
+				Limits:   resource.ResourceLimit,
+				Requests: resource.ResourceLimit,
 			},
 			VolumeMounts: volumeMount,
 		})

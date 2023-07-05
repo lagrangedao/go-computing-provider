@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/docker"
 	"github.com/lagrangedao/go-computing-provider/yaml"
+	"io"
 	appV1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"math/rand"
@@ -178,15 +179,22 @@ func DeleteJob(c *gin.Context) {
 }
 
 func StatisticalSources(c *gin.Context) {
+	location, err := getLocation()
+	if err != nil {
+		logs.GetLogger().Error(err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed get location info"})
+	}
+
 	k8sService := NewK8sService()
 	statisticalSources, err := k8sService.StatisticalSources(context.TODO())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
+
 	nodeID, _, _ := generateNodeID()
 	c.JSON(http.StatusOK, models.ClusterResource{
 		NodeId:      nodeID,
-		Region:      "亚洲",
+		Region:      location,
 		ClusterInfo: statisticalSources,
 	})
 }
@@ -715,4 +723,56 @@ func generateString(length int) string {
 func resourceQuantity(quantity string) *resource.Quantity {
 	q, _ := resource.ParseQuantity(quantity)
 	return &q
+}
+
+func getLocation() (string, error) {
+	publicIpAddress, err := getLocalIPAddress()
+	if err != nil {
+		return "", err
+	}
+	logs.GetLogger().Infof("publicIpAddress: %s", publicIpAddress)
+
+	resp, err := http.Get("http://ip-api.com/json/" + publicIpAddress)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var ipInfo struct {
+		Country     string `json:"country"`
+		CountryCode string `json:"countryCode"`
+		City        string `json:"city"`
+		Region      string `json:"region"`
+	}
+	if err = json.Unmarshal(body, &ipInfo); err != nil {
+		return "", err
+	}
+
+	return ipInfo.CountryCode + "-" + ipInfo.Region, nil
+}
+
+func getLocalIPAddress() (string, error) {
+	req, err := http.NewRequest("GET", "https://ipapi.co/ip", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36")
+
+	client := http.DefaultClient
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	ipBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(ipBytes)), nil
 }

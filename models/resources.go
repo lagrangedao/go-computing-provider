@@ -1,23 +1,45 @@
 package models
 
-type NodeResource struct {
-	Cpu          CpuModel
-	MemoryTotal  int64
-	StorageTotal int64
-	Gpu          GpuModel
+type ClusterResource struct {
+	NodeId      string          `json:"node_id"`
+	Region      string          `json:"region"`
+	ClusterInfo []*NodeResource `json:"cluster_info"`
 }
 
-type GpuModel struct {
-	TypeName string
-	Count    int
-	Memory   int
+type NodeResource struct {
+	MachineId string       `json:"machine_id"`
+	Cpu       CpuModel     `json:"cpu"`
+	Memory    MemoryModel  `json:"memory"`
+	Gpu       GpuModel     `json:"gpu"`
+	Storage   StorageModel `json:"storage"`
 }
 
 type CpuModel struct {
-	TypeName string
-	Count    int64
+	Model         string `json:"model"`
+	TotalNums     int64  `json:"total_nums"`
+	AvailableNums int64  `json:"available_nums"`
+}
+
+type GpuModel struct {
+	Model           string `json:"model"`
+	TotalNums       int    `json:"total_nums"`
+	AvailableNums   int    `json:"available_nums"`
+	TotalMemory     int64  `json:"total_memory"`
+	AvailableMemory int64  `json:"available_memory"`
 }
 
 type MemoryModel struct {
-	Total int64
+	TotalMemory     int64 `json:"total_memory"`
+	AvailableMemory int64 `json:"available_memory"`
+}
+
+type StorageModel struct {
+	Type          string `json:"type"`
+	TotalSize     int64  `json:"total_size"`
+	AvailableSize int64  `json:"available_size"`
+}
+
+type ResourceStatus struct {
+	Request  int64
+	Capacity int64
 }

@@ -8,6 +8,7 @@ require (
 	github.com/ethereum/go-ethereum v1.11.6
 	github.com/filswan/go-mcs-sdk v0.0.0-20230509154333-3a8409078688
 	github.com/filswan/go-swan-lib v0.2.139
+	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.0
 	github.com/gocelery/gocelery v0.0.0-20201111034804-825d89059344
 	github.com/gomodule/redigo v2.0.0+incompatible

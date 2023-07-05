@@ -177,6 +177,20 @@ func DeleteJob(c *gin.Context) {
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 
+func StatisticalSources(c *gin.Context) {
+	k8sService := NewK8sService()
+	statisticalSources, err := k8sService.StatisticalSources(context.TODO())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+	nodeID, _, _ := generateNodeID()
+	c.JSON(http.StatusOK, models.ClusterResource{
+		NodeId:      nodeID,
+		Region:      "亚洲",
+		ClusterInfo: statisticalSources,
+	})
+}
+
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, jobSourceURI)

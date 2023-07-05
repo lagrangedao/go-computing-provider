@@ -2,6 +2,7 @@ package test
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/computing"
 	"github.com/lagrangedao/go-computing-provider/docker"
@@ -119,4 +120,12 @@ func TestYamlToK8s(t *testing.T) {
 		log.Fatalln(err)
 	}
 	log.Printf("%+v", containerResources)
+}
+
+func TestStatisticalSources(t *testing.T) {
+	service := computing.NewK8sService()
+	_, err := service.StatisticalSources(context.TODO())
+	if err != nil {
+		log.Fatalln(err)
+	}
 }

@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+var clientSet *kubernetes.Clientset
 var k8sOnce sync.Once
 
 type K8sService struct {
@@ -31,7 +32,6 @@ type K8sService struct {
 }
 
 func NewK8sService() *K8sService {
-	var clientSet *kubernetes.Clientset
 	var version string
 	k8sOnce.Do(func() {
 		config, err := rest.InClusterConfig()

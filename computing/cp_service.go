@@ -531,11 +531,11 @@ func deployNamespace(creatorWallet string) error {
 			}
 			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
 
-			networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
-			if err != nil {
-				return fmt.Errorf("failed create networkPolicy, error: %w", err)
-			}
-			logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
+			//networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
+			//if err != nil {
+			//	return fmt.Errorf("failed create networkPolicy, error: %w", err)
+			//}
+			//logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
 		} else {
 			return err
 		}
@@ -634,6 +634,11 @@ func deleteJob(namespace, spaceName string) {
 
 func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {
 	conn := redisPool.Get()
+	_, err := conn.Do("SET", key, "wait-delete", "EX", runTime)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed set redis key and expire time, key: %s, error: %+v", key, err)
+		return
+	}
 
 	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
 	fields := map[string]string{

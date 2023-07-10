@@ -200,7 +200,10 @@ func ReNewJob(c *gin.Context) {
 	}
 
 	if leftTime < 0 {
-		//todo expired
+		c.JSON(http.StatusOK, map[string]string{
+			"status":  "failed",
+			"message": "The job was terminated due to its expiration date",
+		})
 	} else {
 		fullArgs := []interface{}{redisKey}
 		fields := map[string]string{

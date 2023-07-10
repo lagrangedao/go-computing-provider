@@ -10,7 +10,7 @@ type NodeResource struct {
 	MachineId string       `json:"machine_id"`
 	Cpu       CpuModel     `json:"cpu"`
 	Memory    MemoryModel  `json:"memory"`
-	Gpu       []GpuModel   `json:"gpu"`
+	Gpu       GpuModel     `json:"gpu"`
 	Storage   StorageModel `json:"storage"`
 }
 
@@ -21,11 +21,11 @@ type CpuModel struct {
 }
 
 type GpuModel struct {
-	Model           string `json:"model"`
-	TotalNums       int    `json:"total_nums"`
-	AvailableNums   int    `json:"available_nums"`
-	TotalMemory     int64  `json:"total_memory"`
-	AvailableMemory int64  `json:"available_memory"`
+	TotalNums       int      `json:"total_nums"`
+	AvailableNums   int      `json:"available_nums"`
+	TotalMemory     int64    `json:"total_memory"`
+	AvailableMemory int64    `json:"available_memory"`
+	Models          []string `json:"models"`
 }
 
 type MemoryModel struct {

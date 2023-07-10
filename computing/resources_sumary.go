@@ -40,19 +40,19 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 
 	gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
 	if ok {
-		nodeResource.Gpu[0].Model = gpuModel
+		nodeResource.Gpu.Models = append(nodeResource.Gpu.Models, gpuModel)
 	}
 
 	gpuMemory, ok := node.Labels[Nvidia_Gpu_Memory]
 	if ok {
 		gpuMemoryInt, _ := strconv.Atoi(gpuMemory)
-		nodeResource.Gpu[0].TotalMemory = int64(gpuMemoryInt)
+		nodeResource.Gpu.TotalMemory = int64(gpuMemoryInt)
 	}
 
 	gpuCount, ok := node.Labels[Nvidia_Gpu_Count]
 	if ok {
 		gpuCountInt, _ := strconv.Atoi(gpuCount)
-		nodeResource.Gpu[0].TotalNums = gpuCountInt
+		nodeResource.Gpu.TotalNums = gpuCountInt
 	}
 
 	for _, pod := range getPodsFromNode(allPods, node) {
@@ -60,7 +60,7 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 		allocatedCPU += cpuInPod(&pod)
 		allocatedMem += memInPod(&pod)
 	}
-	nodeResource.Gpu[0].AvailableNums = nodeResource.Gpu[0].TotalNums - int(allocatedGPU)
+	nodeResource.Gpu.AvailableNums = nodeResource.Gpu.TotalNums - int(allocatedGPU)
 
 	nodeResource.Cpu.Model = node.Labels[Cpu_Model]
 	nodeResource.Cpu.TotalNums = node.Status.Capacity.Cpu().Value()

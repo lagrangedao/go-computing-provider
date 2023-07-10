@@ -59,7 +59,7 @@ func ReceiveJob(c *gin.Context) {
 	}
 
 	hostPrefix := generateString(10)
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostPrefix, jobData.Duration)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostPrefix, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -159,6 +159,63 @@ func RestartJob(c *gin.Context) {
 	c.JSON(http.StatusOK, jobData)
 }
 
+func ReNewJob(c *gin.Context) {
+	var jobData struct {
+		JobUuid  string `json:"job_uuid"`
+		Duration int    `json:"duration"`
+	}
+
+	if err := c.ShouldBindJSON(&jobData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logs.GetLogger().Infof("renew Job received: %+v", jobData)
+
+	conn := redisPool.Get()
+	redisKey := constants.REDIS_FULL_PREFIX + jobData.JobUuid
+	args := []interface{}{redisKey}
+	args = append(args, "k8s_namespace", "space_name", "expire_time")
+	valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", redisKey, err)
+		return
+	}
+
+	var (
+		namespace string
+		spaceName string
+		leftTime  int64
+		//bidStatus string
+	)
+	if len(valuesStr) >= 3 {
+		namespace = valuesStr[0]
+		spaceName = valuesStr[1]
+		expireTimeStr := valuesStr[2]
+		expireTime, err := strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
+			return
+		}
+		leftTime = time.Now().Unix() - expireTime
+	}
+
+	if leftTime > 0 {
+		//todo expired
+	} else {
+		fullArgs := []interface{}{redisKey}
+		fields := map[string]string{
+			"k8s_namespace": namespace,
+			"space_name":    spaceName,
+			"expire_time":   strconv.Itoa(int(time.Now().Unix()) + int(leftTime) + jobData.Duration),
+		}
+		for key, val := range fields {
+			fullArgs = append(fullArgs, key, val)
+		}
+		conn.Do("HSET", fullArgs...)
+	}
+	c.JSON(http.StatusOK, jobData)
+}
+
 func DeleteJob(c *gin.Context) {
 	var deleteJobReq models.DeleteJobReq
 	if err := c.ShouldBindJSON(&deleteJobReq); err != nil {
@@ -199,7 +256,7 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int) string {
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int, jobUuid string) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, jobSourceURI)
 	if err != nil {
@@ -211,7 +268,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix stri
 	spaceName = strings.ToLower(spaceName)
 	hostName := hostPrefix + conf.GetConfig().API.Domain
 	if containsYaml {
-		yamlToK8s(creator, spaceName, yamlPath, hostName, duration)
+		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, duration)
 	} else {
 		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
 		resource, ok := common.HardwareResource[hardware]
@@ -219,7 +276,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix stri
 			logs.GetLogger().Warnf("not found resource.")
 			return ""
 		}
-		dockerfileToK8s(hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
+		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
 	}
 	return hostName
 }
@@ -234,7 +291,7 @@ type DeploymentReq struct {
 	Res           common.Resource
 }
 
-func dockerfileToK8s(hostName, creatorWallet, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
+func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
 	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
@@ -312,12 +369,11 @@ func dockerfileToK8s(hostName, creatorWallet, spaceName, imageName, dockerfilePa
 		return
 	}
 
-	// watch running time and release resources when expired
-	watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, int64(duration))
+	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	return
 }
 
-func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int) {
+func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, duration int) {
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
 	deleteJob(k8sNameSpace, spaceName)
 
@@ -451,7 +507,7 @@ func yamlToK8s(creatorWallet, spaceName, yamlPath, hostName string, duration int
 		}
 
 		// watch running time and release resources when expired
-		watchContainerRunningTime(string(createDeployment.GetObjectMeta().GetUID()), k8sNameSpace, spaceName, int64(duration))
+		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	}
 }
 
@@ -578,11 +634,6 @@ func deleteJob(namespace, spaceName string) {
 
 func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {
 	conn := redisPool.Get()
-	_, err := conn.Do("SET", key, "wait-delete", "EX", runTime)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed set redis key and expire time, key: %s, error: %+v", key, err)
-		return
-	}
 
 	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
 	fields := map[string]string{

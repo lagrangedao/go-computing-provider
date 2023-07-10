@@ -10,7 +10,7 @@ type NodeResource struct {
 	MachineId string       `json:"machine_id"`
 	Cpu       CpuModel     `json:"cpu"`
 	Memory    MemoryModel  `json:"memory"`
-	Gpu       GpuModel     `json:"gpu"`
+	Gpu       []GpuModel   `json:"gpu"`
 	Storage   StorageModel `json:"storage"`
 }
 

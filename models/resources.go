@@ -21,11 +21,16 @@ type CpuModel struct {
 }
 
 type GpuModel struct {
-	TotalNums       int      `json:"total_nums"`
-	AvailableNums   int      `json:"available_nums"`
-	TotalMemory     int64    `json:"total_memory"`
-	AvailableMemory int64    `json:"available_memory"`
-	Models          []string `json:"models"`
+	TotalNums       int       `json:"total_nums"`
+	AvailableNums   int       `json:"available_nums"`
+	TotalMemory     int64     `json:"total_memory"`
+	AvailableMemory int64     `json:"available_memory"`
+	Details         []GpuInfo `json:"details"`
+}
+
+type GpuInfo struct {
+	Model string `json:"model"`
+	Count int    `json:"count"`
 }
 
 type MemoryModel struct {

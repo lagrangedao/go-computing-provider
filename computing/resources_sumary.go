@@ -38,21 +38,24 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 	var nodeResource = new(models.NodeResource)
 	nodeResource.MachineId = node.Status.NodeInfo.MachineID
 
+	gpuCount, ok := node.Labels[Nvidia_Gpu_Count]
+	if ok {
+		gpuCountInt, _ := strconv.Atoi(gpuCount)
+		nodeResource.Gpu.TotalNums = gpuCountInt
+	}
+
 	gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
 	if ok {
-		nodeResource.Gpu.Models = append(nodeResource.Gpu.Models, gpuModel)
+		nodeResource.Gpu.Details = append(nodeResource.Gpu.Details, models.GpuInfo{
+			Model: gpuModel,
+			Count: nodeResource.Gpu.TotalNums,
+		})
 	}
 
 	gpuMemory, ok := node.Labels[Nvidia_Gpu_Memory]
 	if ok {
 		gpuMemoryInt, _ := strconv.Atoi(gpuMemory)
 		nodeResource.Gpu.TotalMemory = int64(gpuMemoryInt)
-	}
-
-	gpuCount, ok := node.Labels[Nvidia_Gpu_Count]
-	if ok {
-		gpuCountInt, _ := strconv.Atoi(gpuCount)
-		nodeResource.Gpu.TotalNums = gpuCountInt
 	}
 
 	for _, pod := range getPodsFromNode(allPods, node) {

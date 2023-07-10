@@ -196,10 +196,10 @@ func ReNewJob(c *gin.Context) {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
 			return
 		}
-		leftTime = time.Now().Unix() - expireTime
+		leftTime = expireTime - time.Now().Unix()
 	}
 
-	if leftTime > 0 {
+	if leftTime < 0 {
 		//todo expired
 	} else {
 		fullArgs := []interface{}{redisKey}
@@ -212,8 +212,11 @@ func ReNewJob(c *gin.Context) {
 			fullArgs = append(fullArgs, key, val)
 		}
 		conn.Do("HSET", fullArgs...)
+		conn.Do("SET", jobData.JobUuid, "wait-delete", "EX", int(leftTime)+jobData.Duration)
 	}
-	c.JSON(http.StatusOK, jobData)
+	c.JSON(http.StatusOK, map[string]string{
+		"status": "success",
+	})
 }
 
 func DeleteJob(c *gin.Context) {

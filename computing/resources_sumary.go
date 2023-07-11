@@ -64,6 +64,8 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 	nodeResource.Memory.TotalMemory = node.Status.Capacity.Memory().Value()
 	nodeResource.Memory.AvailableMemory = nodeResource.Memory.TotalMemory - allocatedMem
 
+	nodeResource.Gpu.AvailableNums = nodeResource.Gpu.TotalNums - int(allocatedGPU)
+	nodeResource.Gpu.AvailableMemory = int64(nodeResource.Gpu.AvailableNums * gpuMemoryInt)
 	for i := 0; i < nodeResource.Gpu.AvailableNums; i++ {
 		gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
 		if ok {
@@ -84,10 +86,6 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 			})
 		}
 	}
-
-	nodeResource.Gpu.AvailableNums = nodeResource.Gpu.TotalNums - int(allocatedGPU)
-	nodeResource.Gpu.AvailableMemory = int64(nodeResource.Gpu.AvailableNums * gpuMemoryInt)
-
 	return nodeResource, nil
 }
 

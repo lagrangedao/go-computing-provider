@@ -29,8 +29,9 @@ type GpuModel struct {
 }
 
 type GpuInfo struct {
-	Model string `json:"model"`
-	Count int    `json:"count"`
+	Model           string `json:"model"`
+	TotalMemory     int64  `json:"total_memory"`
+	AvailableMemory int64  `json:"available_memory"`
 }
 
 type MemoryModel struct {

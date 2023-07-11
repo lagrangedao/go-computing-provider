@@ -44,18 +44,11 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 		nodeResource.Gpu.TotalNums = gpuCountInt
 	}
 
-	gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
-	if ok {
-		nodeResource.Gpu.Details = append(nodeResource.Gpu.Details, models.GpuInfo{
-			Model: gpuModel,
-			Count: nodeResource.Gpu.TotalNums,
-		})
-	}
-
+	var gpuMemoryInt int
 	gpuMemory, ok := node.Labels[Nvidia_Gpu_Memory]
 	if ok {
-		gpuMemoryInt, _ := strconv.Atoi(gpuMemory)
-		nodeResource.Gpu.TotalMemory = int64(gpuMemoryInt)
+		gpuMemoryInt, _ = strconv.Atoi(gpuMemory)
+		nodeResource.Gpu.TotalMemory = int64(gpuMemoryInt * nodeResource.Gpu.TotalNums)
 	}
 
 	for _, pod := range getPodsFromNode(allPods, node) {
@@ -63,7 +56,6 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 		allocatedCPU += cpuInPod(&pod)
 		allocatedMem += memInPod(&pod)
 	}
-	nodeResource.Gpu.AvailableNums = nodeResource.Gpu.TotalNums - int(allocatedGPU)
 
 	nodeResource.Cpu.Model = node.Labels[Cpu_Model]
 	nodeResource.Cpu.TotalNums = node.Status.Capacity.Cpu().Value()
@@ -71,6 +63,30 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 
 	nodeResource.Memory.TotalMemory = node.Status.Capacity.Memory().Value()
 	nodeResource.Memory.AvailableMemory = nodeResource.Memory.TotalMemory - allocatedMem
+
+	for i := 0; i < nodeResource.Gpu.AvailableNums; i++ {
+		gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
+		if ok {
+			nodeResource.Gpu.Details = append(nodeResource.Gpu.Details, models.GpuInfo{
+				Model:           gpuModel,
+				TotalMemory:     int64(gpuMemoryInt),
+				AvailableMemory: int64(gpuMemoryInt),
+			})
+		}
+	}
+	for i := 0; i < int(allocatedGPU); i++ {
+		gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
+		if ok {
+			nodeResource.Gpu.Details = append(nodeResource.Gpu.Details, models.GpuInfo{
+				Model:           gpuModel,
+				TotalMemory:     int64(gpuMemoryInt),
+				AvailableMemory: 0,
+			})
+		}
+	}
+
+	nodeResource.Gpu.AvailableNums = nodeResource.Gpu.TotalNums - int(allocatedGPU)
+	nodeResource.Gpu.AvailableMemory = int64(nodeResource.Gpu.AvailableNums * gpuMemoryInt)
 
 	return nodeResource, nil
 }

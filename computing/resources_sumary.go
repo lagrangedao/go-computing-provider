@@ -30,7 +30,6 @@ func allActivePods(clientSet *kubernetes.Clientset) ([]corev1.Pod, error) {
 
 func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResource, error) {
 	var (
-		allocatedGPU int64
 		allocatedCPU int64
 		allocatedMem int64
 	)
@@ -38,54 +37,18 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 	var nodeResource = new(models.NodeResource)
 	nodeResource.MachineId = node.Status.NodeInfo.MachineID
 
-	gpuCount, ok := node.Labels[Nvidia_Gpu_Count]
-	if ok {
-		gpuCountInt, _ := strconv.Atoi(gpuCount)
-		nodeResource.Gpu.TotalNums = gpuCountInt
-	}
-
-	var gpuMemoryInt int
-	gpuMemory, ok := node.Labels[Nvidia_Gpu_Memory]
-	if ok {
-		gpuMemoryInt, _ = strconv.Atoi(gpuMemory)
-		nodeResource.Gpu.TotalMemory = int64(gpuMemoryInt * nodeResource.Gpu.TotalNums)
-	}
-
 	for _, pod := range getPodsFromNode(allPods, node) {
-		allocatedGPU += gpuInPod(&pod)
 		allocatedCPU += cpuInPod(&pod)
 		allocatedMem += memInPod(&pod)
 	}
 
-	nodeResource.Cpu.Model = node.Labels[Cpu_Model]
-	nodeResource.Cpu.TotalNums = node.Status.Capacity.Cpu().Value()
-	nodeResource.Cpu.AvailableNums = nodeResource.Cpu.TotalNums - allocatedCPU
+	nodeResource.Cpu.Total = strconv.FormatInt(node.Status.Capacity.Cpu().Value(), 10)
+	nodeResource.Cpu.Used = strconv.FormatInt(allocatedCPU, 10)
+	nodeResource.Cpu.Free = strconv.FormatInt(node.Status.Capacity.Cpu().Value()-allocatedCPU, 10)
 
-	nodeResource.Memory.TotalMemory = node.Status.Capacity.Memory().Value()
-	nodeResource.Memory.AvailableMemory = nodeResource.Memory.TotalMemory - allocatedMem
-
-	nodeResource.Gpu.AvailableNums = nodeResource.Gpu.TotalNums - int(allocatedGPU)
-	nodeResource.Gpu.AvailableMemory = int64(nodeResource.Gpu.AvailableNums * gpuMemoryInt)
-	for i := 0; i < nodeResource.Gpu.AvailableNums; i++ {
-		gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
-		if ok {
-			nodeResource.Gpu.Details = append(nodeResource.Gpu.Details, models.GpuInfo{
-				Model:           gpuModel,
-				TotalMemory:     int64(gpuMemoryInt),
-				AvailableMemory: int64(gpuMemoryInt),
-			})
-		}
-	}
-	for i := 0; i < int(allocatedGPU); i++ {
-		gpuModel, ok := node.Labels[Nvidia_Gpu_Product]
-		if ok {
-			nodeResource.Gpu.Details = append(nodeResource.Gpu.Details, models.GpuInfo{
-				Model:           gpuModel,
-				TotalMemory:     int64(gpuMemoryInt),
-				AvailableMemory: 0,
-			})
-		}
-	}
+	nodeResource.Memory.Total = strconv.FormatInt(node.Status.Capacity.Memory().Value(), 10) + " MiB"
+	nodeResource.Memory.Used = strconv.FormatInt(allocatedMem, 10) + " MiB"
+	nodeResource.Memory.Free = strconv.FormatInt(node.Status.Capacity.Memory().Value()-allocatedMem, 10) + " MiB"
 	return nodeResource, nil
 }
 

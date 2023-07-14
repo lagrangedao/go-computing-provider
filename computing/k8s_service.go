@@ -2,10 +2,12 @@ package computing
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/models"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -297,14 +299,68 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 		logs.GetLogger().Error(err)
 		return nil, err
 	}
+
+	nodeGpuInfoMap, err := s.GetPodLog(ctx)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return nil, err
+	}
+
 	for _, node := range nodes.Items {
 		nodeResource, err := getNodeResource(activePods, &node)
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
+
+		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
+			var gpuInfo models.Gpu
+			err := json.Unmarshal([]byte(gpu.String()), &gpuInfo)
+			if err != nil {
+				logs.GetLogger().Error(err)
+				return nil, err
+			}
+			nodeResource.Gpu = gpuInfo
+		}
 		nodeList = append(nodeList, nodeResource)
 	}
 	return nodeList, nil
+}
+
+func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder, error) {
+	var num int64 = 1
+	podLogOptions := coreV1.PodLogOptions{
+		Container:  "",
+		TailLines:  &num,
+		Timestamps: false,
+	}
+
+	podList, err := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).List(ctx, metaV1.ListOptions{
+		LabelSelector: "app=hardware-collect",
+	})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return nil, err
+	}
+
+	result := make(map[string]*strings.Builder)
+	for _, pod := range podList.Items {
+		name := pod.Spec.NodeName
+
+		req := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).GetLogs(pod.Name, &podLogOptions)
+		podLogs, err := req.Stream(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+		defer podLogs.Close()
+
+		buf := new(strings.Builder)
+		_, err = io.Copy(buf, podLogs)
+		if err != nil {
+			return nil, err
+		}
+		result[name] = buf
+	}
+	return result, nil
 }
 
 func generateLabel(name string) map[string]string {

@@ -7,42 +7,32 @@ type ClusterResource struct {
 }
 
 type NodeResource struct {
-	MachineId string       `json:"machine_id"`
-	Cpu       CpuModel     `json:"cpu"`
-	Memory    MemoryModel  `json:"memory"`
-	Gpu       GpuModel     `json:"gpu"`
-	Storage   StorageModel `json:"storage"`
+	MachineId string `json:"machine_id"`
+	Model     string `json:"model"`
+	Cpu       Common `json:"cpu"`
+	Vcpu      Common `json:"vcpu"`
+	Memory    Common `json:"memory"`
+	Gpu       Gpu    `json:"gpu"`
+	Storage   Common `json:"storage"`
 }
 
-type CpuModel struct {
-	Model         string `json:"model"`
-	TotalNums     int64  `json:"total_nums"`
-	AvailableNums int64  `json:"available_nums"`
+type Gpu struct {
+	DriverVersion string      `json:"driver_version"`
+	CudaVersion   string      `json:"cuda_version"`
+	AttachedGpus  int         `json:"attached_gpus"`
+	Details       []GpuDetail `json:"details"`
 }
 
-type GpuModel struct {
-	TotalNums       int       `json:"total_nums"`
-	AvailableNums   int       `json:"available_nums"`
-	TotalMemory     int64     `json:"total_memory"`
-	AvailableMemory int64     `json:"available_memory"`
-	Details         []GpuInfo `json:"details"`
+type GpuDetail struct {
+	ProductName     string `json:"product_name"`
+	FbMemoryUsage   Common `json:"fb_memory_usage"`
+	Bar1MemoryUsage Common `json:"bar1_memory_usage"`
 }
 
-type GpuInfo struct {
-	Model           string `json:"model"`
-	TotalMemory     int64  `json:"total_memory"`
-	AvailableMemory int64  `json:"available_memory"`
-}
-
-type MemoryModel struct {
-	TotalMemory     int64 `json:"total_memory"`
-	AvailableMemory int64 `json:"available_memory"`
-}
-
-type StorageModel struct {
-	Type          string `json:"type"`
-	TotalSize     int64  `json:"total_size"`
-	AvailableSize int64  `json:"available_size"`
+type Common struct {
+	Total string `json:"total"`
+	Used  string `json:"used"`
+	Free  string `json:"free"`
 }
 
 type ResourceStatus struct {

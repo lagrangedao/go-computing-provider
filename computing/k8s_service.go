@@ -313,13 +313,15 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 		}
 
 		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
-			var gpuInfo models.Gpu
+			var gpuInfo struct {
+				Gpu models.Gpu `json:"gpu"`
+			}
 			err := json.Unmarshal([]byte(gpu.String()), &gpuInfo)
 			if err != nil {
 				logs.GetLogger().Error(err)
 				return nil, err
 			}
-			nodeResource.Gpu = gpuInfo
+			nodeResource.Gpu = gpuInfo.Gpu
 		}
 		nodeList = append(nodeList, nodeResource)
 	}
@@ -344,23 +346,28 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 
 	result := make(map[string]*strings.Builder)
 	for _, pod := range podList.Items {
-		name := pod.Spec.NodeName
-
 		req := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).GetLogs(pod.Name, &podLogOptions)
-		podLogs, err := req.Stream(context.TODO())
+		buf, err := readLog(req)
 		if err != nil {
 			return nil, err
 		}
-		defer podLogs.Close()
-
-		buf := new(strings.Builder)
-		_, err = io.Copy(buf, podLogs)
-		if err != nil {
-			return nil, err
-		}
-		result[name] = buf
+		result[pod.Spec.NodeName] = buf
 	}
 	return result, nil
+}
+
+func readLog(req *rest.Request) (*strings.Builder, error) {
+	podLogs, err := req.Stream(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	defer podLogs.Close()
+	buf := new(strings.Builder)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
 }
 
 func generateLabel(name string) map[string]string {

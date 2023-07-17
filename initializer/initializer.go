@@ -62,8 +62,7 @@ func ProjectInit() {
 	// Start sending heartbeats
 	go sendHeartbeats(nodeID)
 
-	computing.WatchExpiredTask()
-	computing.WatchNameSpaceForDeleted()
+	computing.RunSyncTask()
 	celeryService := computing.NewCeleryService()
 	celeryService.RegisterTask(constants.TASK_DEPLOY, computing.DeploySpaceTask)
 	celeryService.Start()

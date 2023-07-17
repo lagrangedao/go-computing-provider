@@ -47,10 +47,10 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 	nodeResource.Cpu.Used = strconv.FormatInt(allocatedCPU, 10)
 	nodeResource.Cpu.Free = strconv.FormatInt(node.Status.Capacity.Cpu().Value()-allocatedCPU, 10)
 
-	nodeResource.Memory.Total = fmt.Sprintf("%.3f GiB", float64(node.Status.Capacity.Memory().Value()/1024/1024/1024))
-	nodeResource.Memory.Used = fmt.Sprintf("%.3f GiB", float64(allocatedMem/1024/1024/1024))
+	nodeResource.Memory.Total = fmt.Sprintf("%.2f GiB", float64(node.Status.Capacity.Memory().Value()/1024/1024/1024))
+	nodeResource.Memory.Used = fmt.Sprintf("%.2f GiB", float64(allocatedMem/1024/1024/1024))
 	freeMemory := node.Status.Capacity.Memory().Value() - allocatedMem
-	nodeResource.Memory.Free = fmt.Sprintf("%.3f GiB", float64(freeMemory/1024/1024/1024))
+	nodeResource.Memory.Free = fmt.Sprintf("%.2f GiB", float64(freeMemory/1024/1024/1024))
 	return nodeResource, nil
 }
 

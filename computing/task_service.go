@@ -60,7 +60,8 @@ func reportClusterResource(location, nodeId string) {
 		return
 	}
 
-	resp, err := http.Post(conf.GetConfig().LAD.ServerUrl+"/cp/summary", "application/json", bytes.NewBuffer(payload))
+	url := conf.GetConfig().LAD.ServerUrl + "/cp/summary"
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
 		return
@@ -68,7 +69,7 @@ func reportClusterResource(location, nodeId string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request returns a non-200 status code: %d", resp.StatusCode)
+		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
 		return
 	}
 	logs.GetLogger().Info("report cluster node resources successfully")

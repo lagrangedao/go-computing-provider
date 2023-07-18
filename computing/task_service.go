@@ -60,8 +60,17 @@ func reportClusterResource(location, nodeId string) {
 		return
 	}
 
+	client := &http.Client{}
 	url := conf.GetConfig().LAD.ServerUrl + "/cp/summary"
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		logs.GetLogger().Errorf("Error creating request: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
 		return

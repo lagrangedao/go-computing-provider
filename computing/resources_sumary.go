@@ -60,7 +60,7 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 	freeMemory := node.Status.Capacity.Memory().Value() - usedMem
 	nodeResource.Memory.Free = fmt.Sprintf("%.2f GiB", float64(freeMemory/1024/1024/1024))
 
-	nodeResource.Storage.Total = fmt.Sprintf("%.2f GiB", float64(node.Status.Allocatable.Storage().Value()/1024/1024/1024))
+	nodeResource.Storage.Total = fmt.Sprintf("%.2f GiB", float64(node.Status.Allocatable.StorageEphemeral().Value()/1024/1024/1024))
 	nodeResource.Storage.Used = fmt.Sprintf("%.2f GiB", float64(usedStorage/1024/1024/1024))
 	freeStorage := node.Status.Allocatable.Storage().Value() - usedStorage
 	nodeResource.Storage.Free = fmt.Sprintf("%.2f GiB", float64(freeStorage/1024/1024/1024))
@@ -80,7 +80,7 @@ func getPodsFromNode(allPods []corev1.Pod, node *corev1.Node) (pods []corev1.Pod
 func storageInPod(pod *corev1.Pod) (storageUsed int64) {
 	containers := pod.Spec.Containers
 	for _, container := range containers {
-		val, ok := container.Resources.Requests[corev1.ResourceStorage]
+		val, ok := container.Resources.Requests[corev1.ResourceEphemeralStorage]
 		if !ok {
 			continue
 		}

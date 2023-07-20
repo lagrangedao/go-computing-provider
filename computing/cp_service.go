@@ -58,8 +58,8 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 
-	hostPrefix := generateString(10)
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostPrefix, jobData.Duration, jobData.UUID)
+	hostName := generateString(10) + conf.GetConfig().API.Domain
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -73,7 +73,7 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
 	}()
 
-	jobData.JobResultURI = fmt.Sprintf("https://%s%s", hostPrefix, conf.GetConfig().API.Domain)
+	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
 
 	c.JSON(http.StatusOK, jobData)
@@ -119,7 +119,7 @@ func submitJob(jobData *models.JobData) {
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
 }
 
-func RestartJob(c *gin.Context) {
+func RedeployJob(c *gin.Context) {
 	var jobData models.JobData
 
 	if err := c.ShouldBindJSON(&jobData); err != nil {
@@ -135,8 +135,14 @@ func RestartJob(c *gin.Context) {
 		return
 	}
 
-	hostPrefix := generateString(10)
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostPrefix, jobData.Duration)
+	var hostName string
+	if jobData.JobResultURI != "" {
+		hostName = strings.ReplaceAll(jobData.JobResultURI, "https://", "")
+	} else {
+		hostName = generateString(10) + conf.GetConfig().API.Domain
+	}
+
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostName, jobData.Duration)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -152,7 +158,7 @@ func RestartJob(c *gin.Context) {
 		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
 	}()
 
-	jobData.JobResultURI = fmt.Sprintf("https://%s%s", hostPrefix, conf.GetConfig().API.Domain)
+	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
 	logs.GetLogger().Infof("update Job received: %+v", jobData)
 
@@ -262,7 +268,7 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix string, duration int, jobUuid string) string {
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostName string, duration int, jobUuid string) string {
 	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, jobSourceURI)
 	if err != nil {
@@ -272,17 +278,16 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostPrefix stri
 
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
-	hostName := hostPrefix + conf.GetConfig().API.Domain
 	if containsYaml {
 		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, duration)
 	} else {
 		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
-		resource, ok := common.HardwareResource[hardware]
+		r, ok := common.HardwareResource[hardware]
 		if !ok {
 			logs.GetLogger().Warnf("not found resource.")
 			return ""
 		}
-		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, resource, duration)
+		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, r, duration)
 	}
 	return hostName
 }

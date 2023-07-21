@@ -9,6 +9,7 @@ import (
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/models"
+	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,38 @@ import (
 )
 
 func RunSyncTask() {
+	go func() {
+		k8sService := NewK8sService()
+		nodes, err := k8sService.k8sClient.CoreV1().Nodes().List(context.TODO(), metaV1.ListOptions{})
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+
+		nodeGpuInfoMap, err := k8sService.GetPodLog(context.TODO())
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+
+		for _, node := range nodes.Items {
+			if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
+				var gpuInfo struct {
+					Gpu models.Gpu `json:"gpu"`
+				}
+				if err = json.Unmarshal([]byte(gpu.String()), &gpuInfo); err != nil {
+					logs.GetLogger().Error(err)
+					return
+				}
+				for _, detail := range gpuInfo.Gpu.Details {
+					if err = k8sService.AddNodeLabel(&node, detail.ProductName); err != nil {
+						logs.GetLogger().Error(err)
+					}
+				}
+			}
+		}
+	}()
+
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {

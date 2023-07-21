@@ -8,6 +8,7 @@ import (
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/models"
 	"io"
+	"k8s.io/client-go/util/retry"
 	"os"
 	"path/filepath"
 	"strings"
@@ -354,6 +355,19 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 		result[pod.Spec.NodeName] = buf
 	}
 	return result, nil
+}
+
+func (s *K8sService) AddNodeLabel(node *coreV1.Node, key string) error {
+	key = strings.ReplaceAll(key, " ", "-")
+	node.Labels[key] = "true"
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, updateErr := s.k8sClient.CoreV1().Nodes().Update(context.Background(), node, metaV1.UpdateOptions{})
+		return updateErr
+	})
+	if retryErr != nil {
+		return fmt.Errorf("failed update node label: %w", retryErr)
+	}
+	return nil
 }
 
 func readLog(req *rest.Request) (*strings.Builder, error) {

@@ -357,8 +357,13 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 	return result, nil
 }
 
-func (s *K8sService) AddNodeLabel(node *coreV1.Node, key string) error {
+func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 	key = strings.ReplaceAll(key, " ", "-")
+
+	node, err := s.k8sClient.CoreV1().Nodes().Get(context.Background(), nodeName, metaV1.GetOptions{})
+	if err != nil {
+		return err
+	}
 	node.Labels[key] = "true"
 	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		_, updateErr := s.k8sClient.CoreV1().Nodes().Update(context.Background(), node, metaV1.UpdateOptions{})

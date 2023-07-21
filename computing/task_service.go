@@ -32,7 +32,8 @@ func RunSyncTask() {
 		}
 
 		for _, node := range nodes.Items {
-			if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
+			cpNode := node
+			if gpu, ok := nodeGpuInfoMap[cpNode.Name]; ok {
 				var gpuInfo struct {
 					Gpu models.Gpu `json:"gpu"`
 				}
@@ -41,7 +42,7 @@ func RunSyncTask() {
 					return
 				}
 				for _, detail := range gpuInfo.Gpu.Details {
-					if err = k8sService.AddNodeLabel(&node, detail.ProductName); err != nil {
+					if err = k8sService.AddNodeLabel(cpNode.Name, detail.ProductName); err != nil {
 						logs.GetLogger().Error(err)
 					}
 				}

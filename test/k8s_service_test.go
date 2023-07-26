@@ -2,8 +2,11 @@ package test
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/computing"
+	"github.com/lagrangedao/go-computing-provider/docker"
+	"github.com/lagrangedao/go-computing-provider/yaml"
 	"io"
 	"log"
 	"os"
@@ -77,7 +80,7 @@ func TestTar(t *testing.T) {
 }
 
 func TestDockerBuild(t *testing.T) {
-	dockerService := computing.NewDockerService()
+	dockerService := docker.NewDockerService()
 	//buildPath := "build/0xe259F84193604f9c8228940Ab5cB5c62Dfb514d6/spaces/demo001"
 	//spaceName := "DEMO-123"
 	imageName := "sonic868/demo:v2.0"
@@ -109,4 +112,20 @@ func TestNewStorageService(t *testing.T) {
 
 	//service.CreateFolder("jobs")
 
+}
+
+func TestYamlToK8s(t *testing.T) {
+	containerResources, err := yaml.HandlerYaml("/Users/sonic/Documents/python_space/go-computing-provider/CodiMD.yaml")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Printf("%+v", containerResources)
+}
+
+func TestStatisticalSources(t *testing.T) {
+	service := computing.NewK8sService()
+	_, err := service.StatisticalSources(context.TODO())
+	if err != nil {
+		log.Fatalln(err)
+	}
 }

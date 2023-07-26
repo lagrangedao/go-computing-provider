@@ -2,11 +2,16 @@ package computing
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"net"
+	"github.com/lagrangedao/go-computing-provider/models"
+	"io"
+	"k8s.io/client-go/util/retry"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	appV1 "k8s.io/api/apps/v1"
@@ -21,90 +26,54 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
+var clientSet *kubernetes.Clientset
 var k8sOnce sync.Once
-var clientset *kubernetes.Clientset
 
 type K8sService struct {
 	k8sClient *kubernetes.Clientset
+	Version   string
 }
 
 func NewK8sService() *K8sService {
+	var version string
 	k8sOnce.Do(func() {
 		config, err := rest.InClusterConfig()
 		if err != nil {
-			// 如果不在集群内，则尝试使用kubeconfig文件进行认证
-			var kubeconfig *string
+			var kubeConfig *string
 			if home := homedir.HomeDir(); home != "" {
-				kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
+				kubeConfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
 			} else {
-				kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
+				kubeConfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
 			}
 			flag.Parse()
-			config, err = clientcmd.BuildConfigFromFlags("", *kubeconfig)
+			config, err = clientcmd.BuildConfigFromFlags("", *kubeConfig)
 			if err != nil {
 				logs.GetLogger().Errorf("Failed create k8s config, error: %v", err)
 				return
 			}
 		}
-		clientset, err = kubernetes.NewForConfig(config)
+		clientSet, err = kubernetes.NewForConfig(config)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed create k8s clientset, error: %v", err)
 			return
 		}
+
+		versionInfo, err := clientSet.Discovery().ServerVersion()
+		if err != nil {
+			logs.GetLogger().Errorf("Failed get k8s version, error: %v", err)
+			return
+		}
+		version = versionInfo.String()
 	})
 
 	return &K8sService{
-		k8sClient: clientset,
+		k8sClient: clientSet,
+		Version:   version,
 	}
 }
 
-func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, deploy DeploymentReq) (result *appV1.Deployment, err error) {
-	deployment := &appV1.Deployment{
-		TypeMeta: metaV1.TypeMeta{
-			Kind:       "Deployment",
-			APIVersion: "apps/v1",
-		},
-		ObjectMeta: metaV1.ObjectMeta{
-			Name:      deploy.DeployName,
-			Namespace: nameSpace,
-		},
-		Spec: appV1.DeploymentSpec{
-			Selector: &metaV1.LabelSelector{
-				MatchLabels: deploy.Label,
-			},
-
-			Template: coreV1.PodTemplateSpec{
-				ObjectMeta: metaV1.ObjectMeta{
-					Labels:    deploy.Label,
-					Namespace: nameSpace,
-				},
-
-				Spec: coreV1.PodSpec{
-					Containers: []coreV1.Container{{
-						Name:            deploy.ContainerName,
-						Image:           deploy.ImageName,
-						ImagePullPolicy: coreV1.PullIfNotPresent,
-						Ports: []coreV1.ContainerPort{{
-							ContainerPort: deploy.ContainerPort,
-						}},
-						Resources: coreV1.ResourceRequirements{
-							Limits: coreV1.ResourceList{
-								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
-								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-							},
-							Requests: coreV1.ResourceList{
-								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
-								//coreV1.ResourceName("nvidia.com/gpu"): *resource.NewQuantity(deploy.Res.Gpu.Quantity, resource.DecimalSI),
-							},
-						},
-					}},
-				},
-			},
-		}}
-
-	return s.k8sClient.AppsV1().Deployments(nameSpace).Create(ctx, deployment, metaV1.CreateOptions{})
+func (s *K8sService) CreateDeployment(ctx context.Context, nameSpace string, deploy *appV1.Deployment) (result *appV1.Deployment, err error) {
+	return s.k8sClient.AppsV1().Deployments(nameSpace).Create(ctx, deploy, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) DeleteDeployment(ctx context.Context, namespace, deploymentName string) error {
@@ -175,7 +144,6 @@ func (s *K8sService) CreateIngress(ctx context.Context, k8sNameSpace, spaceName,
 		ObjectMeta: metaV1.ObjectMeta{
 			Name: constants.K8S_INGRESS_NAME_PREFIX + spaceName,
 			Annotations: map[string]string{
-				"kubernetes.io/ingress.class":           "nginx",
 				"nginx.ingress.kubernetes.io/use-regex": "true",
 			},
 		},
@@ -214,24 +182,25 @@ func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, ingressName s
 	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Delete(ctx, ingressName, metaV1.DeleteOptions{})
 }
 
-func (s *K8sService) GetNodeList() (ip string, err error) {
-	nodes, err := s.k8sClient.CoreV1().Nodes().List(context.Background(), metaV1.ListOptions{})
+func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceName, basePath, configName string) (*coreV1.ConfigMap, error) {
+	configFilePath := filepath.Join(basePath, configName)
+
+	fileNameWithoutExt := filepath.Base(configName[:len(configName)-len(filepath.Ext(configName))])
+
+	iniData, err := os.ReadFile(configFilePath)
 	if err != nil {
-		logs.GetLogger().Error(err)
-		return "", err
+		return nil, err
 	}
 
-	for _, node := range nodes.Items {
-		for _, addr := range node.Status.Addresses {
-			if addr.Type == coreV1.NodeInternalIP {
-				ipAddr := net.ParseIP(addr.Address)
-				if ipAddr != nil {
-					ip = ipAddr.String()
-				}
-			}
-		}
+	configMap := &coreV1.ConfigMap{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: spaceName + "-" + fileNameWithoutExt + "-" + generateString(4),
+		},
+		Data: map[string]string{
+			configName: string(iniData),
+		},
 	}
-	return ip, nil
+	return s.k8sClient.CoreV1().ConfigMaps(k8sNameSpace).Create(ctx, configMap, metaV1.CreateOptions{})
 }
 
 func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {
@@ -317,4 +286,167 @@ func (s *K8sService) ListNamespace(ctx context.Context) ([]string, error) {
 		namespaces = append(namespaces, item.Name)
 	}
 	return namespaces, nil
+}
+
+func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeResource, error) {
+	activePods, err := allActivePods(s.k8sClient)
+	if err != nil {
+		return nil, err
+	}
+	var nodeList []*models.NodeResource
+
+	nodes, err := s.k8sClient.CoreV1().Nodes().List(ctx, metaV1.ListOptions{})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return nil, err
+	}
+
+	nodeGpuInfoMap, err := s.GetPodLog(ctx)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return nil, err
+	}
+
+	for _, node := range nodes.Items {
+		nodeResource, err := getNodeResource(activePods, &node)
+		if err != nil {
+			logs.GetLogger().Error(err)
+		}
+
+		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
+			var gpuInfo struct {
+				Gpu models.Gpu `json:"gpu"`
+			}
+			err := json.Unmarshal([]byte(gpu.String()), &gpuInfo)
+			if err != nil {
+				logs.GetLogger().Error(err)
+				return nil, err
+			}
+			nodeResource.Gpu = gpuInfo.Gpu
+		}
+		nodeList = append(nodeList, nodeResource)
+	}
+	return nodeList, nil
+}
+
+func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder, error) {
+	var num int64 = 1
+	podLogOptions := coreV1.PodLogOptions{
+		Container:  "",
+		TailLines:  &num,
+		Timestamps: false,
+	}
+
+	podList, err := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).List(ctx, metaV1.ListOptions{
+		LabelSelector: "app=hardware-collect",
+	})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return nil, err
+	}
+
+	result := make(map[string]*strings.Builder)
+	for _, pod := range podList.Items {
+		req := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).GetLogs(pod.Name, &podLogOptions)
+		buf, err := readLog(req)
+		if err != nil {
+			return nil, err
+		}
+		result[pod.Spec.NodeName] = buf
+	}
+	return result, nil
+}
+
+func (s *K8sService) AddNodeLabel(nodeName, key string) error {
+	key = strings.ReplaceAll(key, " ", "-")
+
+	node, err := s.k8sClient.CoreV1().Nodes().Get(context.Background(), nodeName, metaV1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	node.Labels[key] = "true"
+	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		_, updateErr := s.k8sClient.CoreV1().Nodes().Update(context.Background(), node, metaV1.UpdateOptions{})
+		return updateErr
+	})
+	if retryErr != nil {
+		return fmt.Errorf("failed update node label: %w", retryErr)
+	}
+	return nil
+}
+
+func readLog(req *rest.Request) (*strings.Builder, error) {
+	podLogs, err := req.Stream(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+	defer podLogs.Close()
+	buf := new(strings.Builder)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func generateLabel(name string) map[string]string {
+	var labels = make(map[string]string)
+	if strings.Contains(name, "NVIDIA") {
+		labels["nvidia.com/gpu.product"] = name
+	}
+	return labels
+}
+
+func IsKubernetesVersionGreaterThan(version string, targetVersion string) bool {
+	v1, err := parseKubernetesVersion(version)
+	if err != nil {
+		return false
+	}
+
+	v2, err := parseKubernetesVersion(targetVersion)
+	if err != nil {
+		return false
+	}
+
+	if v1.major > v2.major {
+		return true
+	} else if v1.major == v2.major && v1.minor > v2.minor {
+		return true
+	} else if v1.major == v2.major && v1.minor == v2.minor && v1.patch > v2.patch {
+		return true
+	}
+
+	return false
+}
+
+type kubernetesVersion struct {
+	major int
+	minor int
+	patch int
+}
+
+func parseKubernetesVersion(version string) (*kubernetesVersion, error) {
+	v := &kubernetesVersion{}
+
+	parts := strings.Split(strings.ReplaceAll(version, "v", ""), ".")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid version format")
+	}
+
+	_, err := fmt.Sscanf(parts[0], "%d", &v.major)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse major version")
+	}
+
+	_, err = fmt.Sscanf(parts[1], "%d", &v.minor)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse minor version")
+	}
+
+	_, err = fmt.Sscanf(parts[2], "%d", &v.patch)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse patch version")
+	}
+
+	return v, nil
 }

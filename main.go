@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/filswan/go-swan-lib/logs"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	cors "github.com/itsjamie/gin-cors"
 	"github.com/lagrangedao/go-computing-provider/conf"
@@ -25,6 +26,7 @@ func main() {
 		MaxAge:          50 * time.Second,
 		ValidateHeaders: false,
 	}))
+	pprof.Register(r)
 
 	v1 := r.Group("/api/v1")
 	routers.CPManager(v1.Group("/computing"))

@@ -1,215 +1,410 @@
 package common
 
-//var HardwareResource = map[string]Resource{
-//	"0": {
-//		Cpu: Specification{
-//			Description: "2 vCPU",
-//			Quantity:    2,
-//		},
-//		Memory: Specification{
-//			Description: "16Gi",
-//			Quantity:    16,
-//		},
-//	},
-//	"1": {
-//		Cpu: Specification{
-//			Description: "8 vCPU",
-//			Quantity:    8,
-//		},
-//		Memory: Specification{
-//			Description: "32Gi",
-//			Quantity:    32,
-//		},
-//	},
-//	"2": {
-//		Cpu: Specification{
-//			Description: "4 vCPU",
-//			Quantity:    4,
-//		},
-//		Memory: Specification{
-//			Description: "15Gi",
-//			Quantity:    15,
-//		},
-//		Gpu: Specification{
-//			Description: "Nvidia T4",
-//			Quantity:    1,
-//		},
-//	},
-//	"3": {
-//		Cpu: Specification{
-//			Description: "8 vCPU",
-//			Quantity:    8,
-//		},
-//		Memory: Specification{
-//			Description: "30Gi",
-//			Quantity:    30,
-//		},
-//		Gpu: Specification{
-//			Description: "Nvidia T4",
-//			Quantity:    1,
-//		},
-//	},
-//	"4": {
-//		Cpu: Specification{
-//			Description: "4 vCPU",
-//			Quantity:    4,
-//		},
-//		Memory: Specification{
-//			Description: "15Gi",
-//			Quantity:    15,
-//		},
-//		Gpu: Specification{
-//			Description: "Nvidia A10G",
-//			Quantity:    1,
-//		},
-//	},
-//	"5": {
-//		Cpu: Specification{
-//			Description: "12 vCPU",
-//			Quantity:    12,
-//		},
-//		Memory: Specification{
-//			Description: "46Gi",
-//			Quantity:    46,
-//		},
-//		Gpu: Specification{
-//			Description: "Nvidia A10G",
-//			Quantity:    1,
-//		},
-//	},
-//	"6": {
-//		Cpu: Specification{
-//			Description: "12 vCPU",
-//			Quantity:    12,
-//		},
-//		Memory: Specification{
-//			Description: "142Gi",
-//			Quantity:    142,
-//		},
-//		Gpu: Specification{
-//			Description: "Nvidia A100 40GB",
-//			Quantity:    1,
-//		},
-//	},
-//	"7": {
-//		Cpu: Specification{
-//			Description: "0 vCPU",
-//			Quantity:    0,
-//		},
-//		Memory: Specification{
-//			Description: "0Gi",
-//			Quantity:    0,
-//		},
-//		Gpu: Specification{
-//			Description: "Nvidia A100 40GB",
-//			Quantity:    0,
-//		},
-//	},
-//}
-
 var HardwareResource = map[string]Resource{
-	"0": {
+	"C1ae.small": {
 		Cpu: Specification{
-			Description: "2 vCPU",
-			Quantity:    2,
+			Quantity: 2,
+			Unit:     "vCPU",
 		},
 		Memory: Specification{
-			Description: "8Gi",
-			Quantity:    8,
-		},
-	},
-	"1": {
-		Cpu: Specification{
-			Description: "8 vCPU",
-			Quantity:    4,
-		},
-		Memory: Specification{
-			Description: "4Gi",
-			Quantity:    4,
-		},
-	},
-	"2": {
-		Cpu: Specification{
-			Description: "4 vCPU",
-			Quantity:    4,
-		},
-		Memory: Specification{
-			Description: "15Gi",
-			Quantity:    15,
+			Quantity: 16,
+			Unit:     "GiB",
 		},
 		Gpu: Specification{
-			Description: "Nvidia T4",
-			Quantity:    1,
+			Quantity: 0,
+			Unit:     "",
 		},
 	},
-	"3": {
+	"C1ae.medium": {
 		Cpu: Specification{
-			Description: "8 vCPU",
-			Quantity:    8,
+			Quantity: 8,
+			Unit:     "vCPU",
 		},
 		Memory: Specification{
-			Description: "30Gi",
-			Quantity:    30,
+			Quantity: 32,
+			Unit:     "GiB",
 		},
 		Gpu: Specification{
-			Description: "Nvidia T4",
-			Quantity:    1,
+			Quantity: 0,
+			Unit:     "",
 		},
 	},
-	"4": {
+	"M1ae.small": {
 		Cpu: Specification{
-			Description: "4 vCPU",
-			Quantity:    4,
+			Quantity: 4,
+			Unit:     "vCPU",
 		},
 		Memory: Specification{
-			Description: "15Gi",
-			Quantity:    15,
+			Quantity: 16,
+			Unit:     "GiB",
 		},
 		Gpu: Specification{
-			Description: "Nvidia A10G",
-			Quantity:    1,
+			Quantity: 1,
+			Unit:     "Nvidia 2060",
 		},
 	},
-	"5": {
+	"M1ae.medium": {
 		Cpu: Specification{
-			Description: "12 vCPU",
-			Quantity:    12,
+			Quantity: 8,
+			Unit:     "vCPU",
 		},
 		Memory: Specification{
-			Description: "46Gi",
-			Quantity:    46,
+			Quantity: 32,
+			Unit:     "GiB",
 		},
 		Gpu: Specification{
-			Description: "Nvidia A10G",
-			Quantity:    1,
+			Quantity: 1,
+			Unit:     "Nvidia 2060",
 		},
 	},
-	"6": {
+	"M1ae.large": {
 		Cpu: Specification{
-			Description: "12 vCPU",
-			Quantity:    12,
+			Quantity: 8,
+			Unit:     "vCPU",
 		},
 		Memory: Specification{
-			Description: "142Gi",
-			Quantity:    142,
+			Quantity: 32,
+			Unit:     "GiB",
 		},
 		Gpu: Specification{
-			Description: "Nvidia A100 40GB",
-			Quantity:    1,
+			Quantity: 1,
+			Unit:     "Nvidia 2080 Ti",
 		},
 	},
-	"7": {
+	"M2ae.small": {
 		Cpu: Specification{
-			Description: "0 vCPU",
-			Quantity:    0,
+			Quantity: 4,
+			Unit:     "vCPU",
 		},
 		Memory: Specification{
-			Description: "0Gi",
-			Quantity:    0,
+			Quantity: 16,
+			Unit:     "GiB",
 		},
 		Gpu: Specification{
-			Description: "Nvidia A100 40GB",
-			Quantity:    0,
+			Quantity: 1,
+			Unit:     "Nvidia 3060 Ti",
+		},
+	},
+	"M2ae.medium": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3060 Ti",
+		},
+	},
+	"M2ae.large": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3070",
+		},
+	},
+	"M2ae.xlarge": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3070 Ti",
+		},
+	},
+	"G1ae.small": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3080",
+		},
+	},
+	"G1ae.medium": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3080",
+		},
+	},
+	"G1ae.large": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3080 Ti",
+		},
+	},
+	"G1ae.xlarge": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3080 Ti",
+		},
+	},
+	"G2ae.small": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia T4",
+		},
+	},
+	"G2ae.medium": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia T4",
+		},
+	},
+	"G2ae.large": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia A10G",
+		},
+	},
+	"G2ae.xlarge": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia A10G",
+		},
+	},
+	"Hpc1ae.small": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3090",
+		},
+	},
+	"Hpc1ae.medium": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3090",
+		},
+	},
+	"Hpc1ae.large": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3090 Ti",
+		},
+	},
+	"Hpc1ae.xlarge": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 3090 Ti",
+		},
+	},
+	"Hpc2ae.small": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 4090",
+		},
+	},
+	"Hpc2ae.medium": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 4090",
+		},
+	},
+	"Hpc2ae.large": {
+		Cpu: Specification{
+			Quantity: 4,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 16,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 4090 Ti",
+		},
+	},
+	"Hpc2ae.xlarge": {
+		Cpu: Specification{
+			Quantity: 8,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 32,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia 4090 Ti",
+		},
+	},
+	"P1ae.small": {
+		Cpu: Specification{
+			Quantity: 12,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 128,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia A100",
+		},
+	},
+	"P1ae.medium": {
+		Cpu: Specification{
+			Quantity: 24,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 256,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia A100",
+		},
+	},
+	"P1ae.large": {
+		Cpu: Specification{
+			Quantity: 12,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 128,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia H100",
+		},
+	},
+	"P1ae.xlarge": {
+		Cpu: Specification{
+			Quantity: 24,
+			Unit:     "vCPU",
+		},
+		Memory: Specification{
+			Quantity: 256,
+			Unit:     "GiB",
+		},
+		Gpu: Specification{
+			Quantity: 1,
+			Unit:     "Nvidia H100",
 		},
 	},
 }
@@ -221,6 +416,6 @@ type Resource struct {
 }
 
 type Specification struct {
-	Description string
-	Quantity    int64
+	Quantity int64
+	Unit     string
 }

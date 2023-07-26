@@ -74,34 +74,34 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 						}
 					}
 
-					var resourceList = make(corev1.ResourceList)
-					if cpRs, ok := dy.Profiles.Compute[deployment.Akash.Profile]; ok {
-						if cpRs.Resources.Cpu.Units != "" {
-							resourceList[corev1.ResourceCPU] = resource.MustParse(cpRs.Resources.Cpu.Units)
-						}
-						if cpRs.Resources.Memory.Size != "" {
-							resourceList[corev1.ResourceMemory] = resource.MustParse(cpRs.Resources.Memory.Size)
-						}
-						if cpRs.Resources.Storage.Size != "" {
-							resourceList[corev1.ResourceStorage] = resource.MustParse(cpRs.Resources.Storage.Size)
-						}
-						if cpRs.Resources.Gpu.Model != "" {
-							if strings.Contains(cpRs.Resources.Gpu.Model, "amd") {
-
-							}
-							if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
-								resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
-								//resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
-								container.GpuModel = cpRs.Resources.Gpu.Model
-							}
-						}
-					}
+					//var resourceList = make(corev1.ResourceList)
+					//if cpRs, ok := dy.Profiles.Compute[deployment.Akash.Profile]; ok {
+					//	if cpRs.Resources.Cpu.Units != "" {
+					//		resourceList[corev1.ResourceCPU] = resource.MustParse(cpRs.Resources.Cpu.Units)
+					//	}
+					//	if cpRs.Resources.Memory.Size != "" {
+					//		resourceList[corev1.ResourceMemory] = resource.MustParse(cpRs.Resources.Memory.Size)
+					//	}
+					//	if cpRs.Resources.Storage.Size != "" {
+					//		resourceList[corev1.ResourceStorage] = resource.MustParse(cpRs.Resources.Storage.Size)
+					//	}
+					//	if cpRs.Resources.Gpu.Model != "" {
+					//		if strings.Contains(cpRs.Resources.Gpu.Model, "amd") {
+					//
+					//		}
+					//		if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
+					//			resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
+					//			//resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
+					//			container.GpuModel = cpRs.Resources.Gpu.Model
+					//		}
+					//	}
+					//}
 
 					if len(service.ReadyCmd) > 0 {
 						container.ReadyCmd = service.ReadyCmd
 					}
 
-					container.ResourceLimit = resourceList
+					//container.ResourceLimit = resourceList
 					container.Count = deployment.Akash.Count
 					depends = append(depends, *container)
 					waitDelete = append(waitDelete, depend)

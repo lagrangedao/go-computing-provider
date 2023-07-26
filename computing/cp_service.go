@@ -275,18 +275,18 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostName string
 		logs.GetLogger().Error(err)
 		return ""
 	}
+	r, ok := common.HardwareResource[hardware]
+	if !ok {
+		logs.GetLogger().Warnf("not found resource.")
+		return ""
+	}
 
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
 	if containsYaml {
-		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, duration)
+		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, r, duration)
 	} else {
 		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
-		r, ok := common.HardwareResource[hardware]
-		if !ok {
-			logs.GetLogger().Warnf("not found resource.")
-			return ""
-		}
 		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, r, duration)
 	}
 	return hostName
@@ -302,7 +302,7 @@ type DeploymentReq struct {
 	Res           common.Resource
 }
 
-func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
+func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, hardwareResource common.Resource, duration int) {
 	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
@@ -346,7 +346,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 				},
 
 				Spec: coreV1.PodSpec{
-					//NodeSelector: generateLabel(""),
+					NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
 					Containers: []coreV1.Container{{
 						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
 						Image:           imageName,
@@ -354,14 +354,36 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: int32(containerPort),
 						}},
+						Env: []coreV1.EnvVar{
+							{
+								Name:  "wallet_address",
+								Value: creatorWallet,
+							},
+							{
+								Name:  "space_name",
+								Value: spaceName,
+							},
+							{
+								Name:  "result_url",
+								Value: hostName,
+							},
+							{
+								Name:  "job_uuid",
+								Value: jobUuid,
+							},
+						},
 						Resources: coreV1.ResourceRequirements{
 							Limits: coreV1.ResourceList{
-								//coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
+								coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 							Requests: coreV1.ResourceList{
-								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
+								coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 						},
 					}},
@@ -384,7 +406,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 	return
 }
 
-func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, duration int) {
+func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, hardwareResource common.Resource, duration int) {
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
 	deleteJob(k8sNameSpace, spaceName)
 
@@ -400,19 +422,19 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 	}
 
 	k8sService := NewK8sService()
-	for _, resource := range containerResources {
-		for i, envVar := range resource.Env {
+	for _, cr := range containerResources {
+		for i, envVar := range cr.Env {
 			if strings.Contains(envVar.Name, "NEXTAUTH_URL") {
-				resource.Env[i].Value = "https://" + hostName
+				cr.Env[i].Value = "https://" + hostName
 				break
 			}
 		}
 
 		var volumeMount []coreV1.VolumeMount
 		var volumes []coreV1.Volume
-		if resource.VolumeMounts.Path != "" {
-			fileNameWithoutExt := filepath.Base(resource.VolumeMounts.Name[:len(resource.VolumeMounts.Name)-len(filepath.Ext(resource.VolumeMounts.Name))])
-			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceName, filepath.Dir(yamlPath), resource.VolumeMounts.Name)
+		if cr.VolumeMounts.Path != "" {
+			fileNameWithoutExt := filepath.Base(cr.VolumeMounts.Name[:len(cr.VolumeMounts.Name)-len(filepath.Ext(cr.VolumeMounts.Name))])
+			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceName, filepath.Dir(yamlPath), cr.VolumeMounts.Name)
 			if err != nil {
 				logs.GetLogger().Error(err)
 				return
@@ -433,13 +455,13 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 			volumeMount = []coreV1.VolumeMount{
 				{
 					Name:      spaceName + "-" + fileNameWithoutExt,
-					MountPath: resource.VolumeMounts.Path,
+					MountPath: cr.VolumeMounts.Path,
 				},
 			}
 		}
 
 		var containers []coreV1.Container
-		for _, depend := range resource.Depends {
+		for _, depend := range cr.Depends {
 			var handler = new(coreV1.ExecAction)
 			handler.Command = depend.ReadyCmd
 			containers = append(containers, coreV1.Container{
@@ -450,10 +472,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 				Env:             depend.Env,
 				Ports:           depend.Ports,
 				ImagePullPolicy: coreV1.PullIfNotPresent,
-				Resources: coreV1.ResourceRequirements{
-					Limits:   resource.ResourceLimit,
-					Requests: resource.ResourceLimit,
-				},
+				Resources:       coreV1.ResourceRequirements{},
 				ReadinessProbe: &coreV1.Probe{
 					ProbeHandler: coreV1.ProbeHandler{
 						Exec: handler,
@@ -464,17 +483,46 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 			})
 		}
 
+		cr.Env = append(cr.Env, []coreV1.EnvVar{
+			{
+				Name:  "wallet_address",
+				Value: creatorWallet,
+			},
+			{
+				Name:  "space_name",
+				Value: spaceName,
+			},
+			{
+				Name:  "result_url",
+				Value: hostName,
+			},
+			{
+				Name:  "job_uuid",
+				Value: jobUuid,
+			},
+		}...)
+
 		containers = append(containers, coreV1.Container{
-			Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + resource.Name,
-			Image:           resource.ImageName,
-			Command:         resource.Command,
-			Args:            resource.Args,
-			Env:             resource.Env,
-			Ports:           resource.Ports,
+			Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + cr.Name,
+			Image:           cr.ImageName,
+			Command:         cr.Command,
+			Args:            cr.Args,
+			Env:             cr.Env,
+			Ports:           cr.Ports,
 			ImagePullPolicy: coreV1.PullIfNotPresent,
 			Resources: coreV1.ResourceRequirements{
-				Limits:   resource.ResourceLimit,
-				Requests: resource.ResourceLimit,
+				Limits: coreV1.ResourceList{
+					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+					coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
+					coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+				},
+				Requests: coreV1.ResourceList{
+					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+					coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
+					coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+				},
 			},
 			VolumeMounts: volumeMount,
 		})
@@ -512,7 +560,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 		}
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(resource.Ports[0].ContainerPort)); err != nil {
+		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
@@ -692,11 +740,6 @@ func generateString(length int) string {
 		result[i] = source[rand.Intn(len(source))]
 	}
 	return string(result)
-}
-
-func resourceQuantity(quantity string) *resource.Quantity {
-	q, _ := resource.ParseQuantity(quantity)
-	return &q
 }
 
 func getLocation() (string, error) {

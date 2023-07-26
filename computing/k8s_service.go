@@ -390,11 +390,14 @@ func readLog(req *rest.Request) (*strings.Builder, error) {
 }
 
 func generateLabel(name string) map[string]string {
-	var labels = make(map[string]string)
-	if strings.Contains(name, "NVIDIA") {
-		labels["nvidia.com/gpu.product"] = name
+	if name != "" {
+		key := strings.ReplaceAll(name, " ", "-")
+		return map[string]string{
+			key: "true",
+		}
+	} else {
+		return map[string]string{}
 	}
-	return labels
 }
 
 func IsKubernetesVersionGreaterThan(version string, targetVersion string) bool {

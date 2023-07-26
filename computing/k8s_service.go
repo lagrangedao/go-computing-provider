@@ -347,7 +347,7 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 
 	result := make(map[string]*strings.Builder)
 	for _, pod := range podList.Items {
-		req := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).GetLogs(pod.Name, &podLogOptions)
+		req := s.k8sClient.CoreV1().Pods("kube-system").GetLogs(pod.Name, &podLogOptions)
 		buf, err := readLog(req)
 		if err != nil {
 			return nil, err

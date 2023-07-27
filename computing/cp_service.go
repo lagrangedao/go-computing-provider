@@ -337,6 +337,18 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 		return
 	}
 
+	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get memory failed, error: %+v", err)
+		return
+	}
+
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get storage failed, error: %+v", err)
+		return
+	}
+
 	// create deployment
 	k8sService := NewK8sService()
 	deployment := &appV1.Deployment{
@@ -389,14 +401,14 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 						Resources: coreV1.ResourceRequirements{
 							Limits: coreV1.ResourceList{
 								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
-								coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+								coreV1.ResourceMemory:           memQuantity,
+								coreV1.ResourceEphemeralStorage: resource.MustParse(""),
 								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 							Requests: coreV1.ResourceList{
 								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
-								coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
-								coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+								coreV1.ResourceMemory:           memQuantity,
+								coreV1.ResourceEphemeralStorage: storageQuantity,
 								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 						},
@@ -829,5 +841,8 @@ func getHardwareDetail(description string) models.Resource {
 	mem, _ := strconv.ParseInt(memSplits[1], 10, 64)
 	hardwareResource.Memory.Quantity = mem
 	hardwareResource.Memory.Unit = memSplits[2]
+
+	hardwareResource.Storage.Quantity = 60
+	hardwareResource.Storage.Unit = "GiB"
 	return hardwareResource
 }

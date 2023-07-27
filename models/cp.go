@@ -54,9 +54,10 @@ type SpaceHardware struct {
 }
 
 type Resource struct {
-	Cpu    Specification
-	Memory Specification
-	Gpu    Specification
+	Cpu     Specification
+	Memory  Specification
+	Gpu     Specification
+	Storage Specification
 }
 
 type Specification struct {

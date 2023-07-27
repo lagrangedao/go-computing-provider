@@ -402,7 +402,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 							Limits: coreV1.ResourceList{
 								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
 								coreV1.ResourceMemory:           memQuantity,
-								coreV1.ResourceEphemeralStorage: resource.MustParse(""),
+								coreV1.ResourceEphemeralStorage: storageQuantity,
 								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 							Requests: coreV1.ResourceList{

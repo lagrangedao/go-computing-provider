@@ -50,6 +50,7 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 	logs.GetLogger().Infof("Job received: %s", jobData.JobSourceURI)
+	logs.GetLogger().Infof("Job Data: %+v", jobData)
 
 	jobSourceURI := jobData.JobSourceURI
 	creator, spaceName, err := getSpaceName(jobSourceURI)
@@ -59,7 +60,7 @@ func ReceiveJob(c *gin.Context) {
 	}
 
 	hostName := generateString(10) + conf.GetConfig().API.Domain
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostName, jobData.Duration, jobData.UUID)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -142,7 +143,7 @@ func RedeployJob(c *gin.Context) {
 		hostName = generateString(10) + conf.GetConfig().API.Domain
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostName, jobData.Duration)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -268,41 +269,54 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostName string, duration int, jobUuid string) string {
-	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
-	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, jobSourceURI)
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
+	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
+
+	spaceAPIURL := fmt.Sprintf(jobSourceURI)
+	resp, err := http.Get(spaceAPIURL)
 	if err != nil {
-		logs.GetLogger().Error(err)
+		logs.GetLogger().Errorf("error making request to Space API: %+v", err)
 		return ""
 	}
-	r, ok := common.HardwareResource[hardware]
-	if !ok {
-		logs.GetLogger().Warnf("not found resource.")
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			logs.GetLogger().Errorf("error closed resp Space API: %+v", err)
+		}
+	}(resp.Body)
+	logs.GetLogger().Infof("Space API response received. Response: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		logs.GetLogger().Errorf("space API response not OK. Status Code: %d", resp.StatusCode)
+		return ""
+	}
+
+	var spaceJson models.SpaceJSON
+	if err := json.NewDecoder(resp.Body).Decode(&spaceJson); err != nil {
+		logs.GetLogger().Errorf("error decoding Space API response JSON: %v", err)
+		return ""
+	}
+
+	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
+	hardwareInfo := getHardwareDetail(spaceHardware.Description)
+
+	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
+	if err != nil {
+		logs.GetLogger().Error(err)
 		return ""
 	}
 
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
 	if containsYaml {
-		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, r, duration)
+		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, hardwareInfo, duration)
 	} else {
 		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
-		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, r, duration)
+		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, hardwareInfo, duration)
 	}
 	return hostName
 }
 
-type DeploymentReq struct {
-	NameSpace     string
-	DeployName    string
-	ContainerName string
-	ImageName     string
-	Label         map[string]string
-	ContainerPort int32
-	Res           common.Resource
-}
-
-func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, hardwareResource common.Resource, duration int) {
+func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, hardwareResource models.Resource, duration int) {
 	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
@@ -406,7 +420,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 	return
 }
 
-func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, hardwareResource common.Resource, duration int) {
+func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, hardwareResource models.Resource, duration int) {
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
 	deleteJob(k8sNameSpace, spaceName)
 
@@ -792,4 +806,28 @@ func getLocalIPAddress() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(ipBytes)), nil
+}
+
+func getHardwareDetail(description string) models.Resource {
+	var hardwareResource models.Resource
+	confSplits := strings.Split(description, "·")
+	if strings.Contains(confSplits[0], "CPU") {
+		hardwareResource.Gpu.Quantity = 0
+		hardwareResource.Gpu.Unit = ""
+	} else {
+		hardwareResource.Gpu.Quantity = 1
+		length := len(confSplits[0]) - 1
+		hardwareResource.Gpu.Unit = confSplits[0][:length]
+	}
+
+	cpuSplits := strings.Split(confSplits[1], " ")
+	cores, _ := strconv.ParseInt(cpuSplits[1], 10, 64)
+	hardwareResource.Cpu.Quantity = cores
+	hardwareResource.Cpu.Unit = cpuSplits[2]
+
+	memSplits := strings.Split(confSplits[2], " ")
+	mem, _ := strconv.ParseInt(memSplits[1], 10, 64)
+	hardwareResource.Memory.Quantity = mem
+	hardwareResource.Memory.Unit = memSplits[2]
+	return hardwareResource
 }

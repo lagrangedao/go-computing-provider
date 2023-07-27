@@ -339,13 +339,13 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 
 	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
 	if err != nil {
-		logs.GetLogger().Error("get memory failed, error: %+v", err)
+		logs.GetLogger().Errorf("get memory failed, error: %+v", err)
 		return
 	}
 
 	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
 	if err != nil {
-		logs.GetLogger().Error("get storage failed, error: %+v", err)
+		logs.GetLogger().Errorf("get storage failed, error: %+v", err)
 		return
 	}
 
@@ -852,9 +852,9 @@ func getHardwareDetail(description string) models.Resource {
 	memSplits := strings.Split(confSplits[2], " ")
 	mem, _ := strconv.ParseInt(memSplits[1], 10, 64)
 	hardwareResource.Memory.Quantity = mem
-	hardwareResource.Memory.Unit = memSplits[2]
+	hardwareResource.Memory.Unit = strings.ReplaceAll(memSplits[2], "B", "")
 
 	hardwareResource.Storage.Quantity = 60
-	hardwareResource.Storage.Unit = "GiB"
+	hardwareResource.Storage.Unit = "Gi"
 	return hardwareResource
 }

@@ -447,6 +447,18 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 		return
 	}
 
+	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get memory failed, error: %+v", err)
+		return
+	}
+
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get storage failed, error: %+v", err)
+		return
+	}
+
 	k8sService := NewK8sService()
 	for _, cr := range containerResources {
 		for i, envVar := range cr.Env {
@@ -539,14 +551,14 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 			Resources: coreV1.ResourceRequirements{
 				Limits: coreV1.ResourceList{
 					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
-					coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
-					coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+					coreV1.ResourceMemory:           memQuantity,
+					coreV1.ResourceEphemeralStorage: storageQuantity,
 					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 				},
 				Requests: coreV1.ResourceList{
 					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
-					coreV1.ResourceMemory:           resource.MustParse(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit)),
-					coreV1.ResourceEphemeralStorage: resource.MustParse("60GiB"),
+					coreV1.ResourceMemory:           memQuantity,
+					coreV1.ResourceEphemeralStorage: storageQuantity,
 					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 				},
 			},

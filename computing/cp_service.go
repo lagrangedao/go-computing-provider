@@ -585,8 +585,9 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 						Namespace: k8sNameSpace,
 					},
 					Spec: coreV1.PodSpec{
-						Containers: containers,
-						Volumes:    volumes,
+						NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
+						Containers:   containers,
+						Volumes:      volumes,
 					},
 				},
 			}}

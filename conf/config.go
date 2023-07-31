@@ -2,6 +2,7 @@ package conf
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -49,13 +50,46 @@ func InitConfig() error {
 	currentDir, _ := os.Getwd()
 	configFile := filepath.Join(currentDir, "config.toml")
 
-	_, err := toml.DecodeFile(configFile, &config)
-	if err != nil {
-		return fmt.Errorf("Failed load config file, path: %s, error: %w", configFile, err)
+	if metaData, err := toml.DecodeFile(configFile, &config); err != nil {
+		return fmt.Errorf("failed load config file, path: %s, error: %w", configFile, err)
+	} else {
+		if !requiredFieldsAreGiven(metaData) {
+			log.Fatal("Required fields not given")
+		}
 	}
 	return nil
 }
 
 func GetConfig() *ComputeNode {
 	return config
+}
+
+func requiredFieldsAreGiven(metaData toml.MetaData) bool {
+	requiredFields := [][]string{
+		{"API"},
+		{"LAD"},
+		{"MCS"},
+		{"Registry"},
+
+		{"API", "MultiAddress"},
+		{"API", "Domain"},
+		{"API", "RedisUrl"},
+
+		{"LAD", "ServerUrl"},
+		{"LAD", "AccessToken"},
+
+		{"MCS", "ApiKey"},
+		{"MCS", "AccessToken"},
+		{"MCS", "BucketName"},
+		{"MCS", "Network"},
+		{"MCS", "FileCachePath"},
+	}
+
+	for _, v := range requiredFields {
+		if !metaData.IsDefined(v...) {
+			log.Fatal("Required fields ", v)
+		}
+	}
+
+	return true
 }

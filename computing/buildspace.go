@@ -77,9 +77,9 @@ func BuildSpaceTaskImage(spaceName string, files []models.SpaceFile) (bool, stri
 
 func BuildImagesByDockerfile(spaceName, imagePath string) (string, string) {
 	imageName := fmt.Sprintf("lagrange/%s:%d", spaceName, time.Now().Unix())
-	if conf.GetConfig().Registry.UserName != "" {
+	if conf.GetConfig().Registry.ServerAddress != "" {
 		imageName = fmt.Sprintf("%s/%s:%d",
-			strings.TrimSpace(conf.GetConfig().Registry.UserName), spaceName, time.Now().Unix())
+			strings.TrimSpace(conf.GetConfig().Registry.ServerAddress), spaceName, time.Now().Unix())
 	}
 	imageName = strings.ToLower(imageName)
 	dockerfilePath := filepath.Join(imagePath, "Dockerfile")
@@ -91,7 +91,7 @@ func BuildImagesByDockerfile(spaceName, imagePath string) (string, string) {
 		return "", ""
 	}
 
-	if conf.GetConfig().Registry.UserName != "" {
+	if conf.GetConfig().Registry.ServerAddress != "" {
 		if err := dockerService.PushImage(imageName); err != nil {
 			logs.GetLogger().Errorf("Error Docker push image: %v", err)
 			return "", ""

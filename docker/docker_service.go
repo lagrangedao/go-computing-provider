@@ -218,7 +218,7 @@ type ErrorLine struct {
 }
 
 func (ds *DockerService) PushImage(imagesName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*600)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*6000)
 	defer cancel()
 
 	var authConfig = types.AuthConfig{
@@ -228,16 +228,23 @@ func (ds *DockerService) PushImage(imagesName string) error {
 	}
 	authConfigBytes, _ := json.Marshal(authConfig)
 	authConfigEncoded := base64.URLEncoding.EncodeToString(authConfigBytes)
-
 	opts := types.ImagePushOptions{RegistryAuth: authConfigEncoded}
-	rd, err := ds.c.ImagePush(ctx, imagesName, opts)
-	if err != nil {
-		return err
-	}
-	defer rd.Close()
 
-	if err = printOut(rd); err != nil {
-		return err
+	// retry
+	retries := 5
+	var err error
+	for i := 0; i < retries; i++ {
+		rd, rerr := ds.c.ImagePush(ctx, imagesName, opts)
+		if rerr == nil {
+			err = printOut(rd)
+			rd.Close()
+			if err == nil {
+				return nil
+			}
+		} else {
+			err = rerr
+		}
+		time.Sleep(2 * time.Second)
 	}
 	return nil
 }

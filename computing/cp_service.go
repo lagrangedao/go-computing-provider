@@ -842,7 +842,8 @@ func getHardwareDetail(description string) models.Resource {
 	} else {
 		hardwareResource.Gpu.Quantity = 1
 		length := len(confSplits[0]) - 1
-		hardwareResource.Gpu.Unit = confSplits[0][:length]
+		oldName := confSplits[0][:length]
+		hardwareResource.Gpu.Unit = strings.ReplaceAll(oldName, "Nvidia", "NVIDIA")
 	}
 
 	cpuSplits := strings.Split(confSplits[1], " ")

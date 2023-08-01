@@ -127,7 +127,7 @@ func RedeployJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logs.GetLogger().Infof("Job received: %+v", jobData)
+	logs.GetLogger().Infof("redeploy Job received: %+v", jobData)
 
 	jobSourceURI := jobData.JobSourceURI
 	creator, spaceName, err := getSpaceName(jobSourceURI)

@@ -322,7 +322,20 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				logs.GetLogger().Error(err)
 				return nil, err
 			}
-			nodeResource.Gpu = gpuInfo.Gpu
+
+			var newGpu = new(models.Gpu)
+			newGpu.DriverVersion = gpuInfo.Gpu.DriverVersion
+			newGpu.CudaVersion = gpuInfo.Gpu.CudaVersion
+
+			for _, detail := range gpuInfo.Gpu.Details {
+				cpDetail := detail
+				if detail.FbMemoryUsage.Used != "0 MiB" {
+					newGpu.Details = append(newGpu.Details, cpDetail)
+				}
+			}
+
+			newGpu.AttachedGpus = len(newGpu.Details)
+			nodeResource.Gpu = *newGpu
 		}
 		nodeList = append(nodeList, nodeResource)
 	}

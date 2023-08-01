@@ -158,8 +158,9 @@ func watchExpiredTask() {
 						logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
 						return
 					}
+					logs.GetLogger().Infof("The namespace: %s, spacename: %s, now: %d, expire: %d", namespace, spaceName, time.Now().Unix(), expireTime)
 					if time.Now().Unix() > expireTime {
-						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
+						logs.GetLogger().Infof("The namespace: %s, spacename: %s, <timer-task> job has reached its runtime and will stop running.", namespace, spaceName)
 						deleteJob(namespace, spaceName)
 						deleteKey = append(deleteKey, key)
 					}

@@ -334,6 +334,10 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				}
 			}
 
+			if len(newGpu.Details) == 0 {
+				newGpu.Details = make([]models.GpuDetail, 0)
+			}
+
 			newGpu.AttachedGpus = len(newGpu.Details)
 			nodeResource.Gpu = *newGpu
 		}

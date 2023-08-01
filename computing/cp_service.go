@@ -297,6 +297,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 	}
 
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
+	logs.GetLogger().Infof("spaceName: %s, hardwareName: %s", spaceName, spaceHardware.Description)
 	hardwareInfo := getHardwareDetail(spaceHardware.Description)
 
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
@@ -841,8 +842,7 @@ func getHardwareDetail(description string) models.Resource {
 		hardwareResource.Gpu.Unit = ""
 	} else {
 		hardwareResource.Gpu.Quantity = 1
-		length := len(confSplits[0]) - 1
-		oldName := confSplits[0][:length]
+		oldName := strings.TrimSpace(confSplits[0])
 		hardwareResource.Gpu.Unit = strings.ReplaceAll(oldName, "Nvidia", "NVIDIA")
 	}
 

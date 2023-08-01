@@ -344,7 +344,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 		return
 	}
 
-	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Storage.Quantity, hardwareResource.Storage.Unit))
 	if err != nil {
 		logs.GetLogger().Errorf("get storage failed, error: %+v", err)
 		return
@@ -454,7 +454,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 		return
 	}
 
-	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Storage.Quantity, hardwareResource.Storage.Unit))
 	if err != nil {
 		logs.GetLogger().Error("get storage failed, error: %+v", err)
 		return

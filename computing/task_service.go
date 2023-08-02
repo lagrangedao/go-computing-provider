@@ -130,16 +130,13 @@ func watchExpiredTask() {
 		var deleteKey []string
 		for range ticker.C {
 			conn := redisPool.Get()
-			cursor := "0"
+
 			prefix := constants.REDIS_FULL_PREFIX + "*"
-			values, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", prefix))
+			keys, err := redis.Strings(conn.Do("KEYS", prefix))
 			if err != nil {
-				logs.GetLogger().Errorf("Failed scan redis %s prefix, error: %+v", prefix, err)
+				logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
 				return
 			}
-
-			cursor, _ = redis.String(values[0], nil)
-			keys, _ := redis.Strings(values[1], nil)
 			for _, key := range keys {
 				args := []interface{}{key}
 				args = append(args, "k8s_namespace", "space_name", "expire_time")
@@ -158,7 +155,7 @@ func watchExpiredTask() {
 						logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
 						return
 					}
-					logs.GetLogger().Infof("The namespace: %s, spacename: %s, now: %d, expire: %d", namespace, spaceName, time.Now().Unix(), expireTime)
+					logs.GetLogger().Infof("redis-key: %s, namespace: %s, spacename: %s, now: %d, expire: %d", key, namespace, spaceName, time.Now().Unix(), expireTime)
 					if time.Now().Unix() > expireTime {
 						logs.GetLogger().Infof("The namespace: %s, spacename: %s, <timer-task> job has reached its runtime and will stop running.", namespace, spaceName)
 						deleteJob(namespace, spaceName)
@@ -170,10 +167,6 @@ func watchExpiredTask() {
 			if len(deleteKey) > 0 {
 				logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
 				deleteKey = nil
-			}
-
-			if cursor == "0" {
-				break
 			}
 		}
 	}()

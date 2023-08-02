@@ -3,7 +3,6 @@ Port = 8085                                   # The port number that the web ser
 MultiAddress = "/ip4/127.0.0.1/tcp/8085"      # The multiAddress for libp2p
 Domain = ""                                   # The domain
 
-OPENAI_API_KEY = ""
 RedisUrl = "redis://127.0.0.1:6379"           # The redis server address
 RedisPassword = ""                            # The redis server access password
 

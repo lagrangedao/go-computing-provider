@@ -686,11 +686,7 @@ func deleteJob(namespace, spaceName string) {
 		return
 	}
 	for _, imageId := range deployImageIds {
-		err = dockerService.RemoveImage(imageId)
-		if err != nil {
-			logs.GetLogger().Errorf("Failed delete unused image, imageId: %s, error: %+v", imageId, err)
-			continue
-		}
+		dockerService.RemoveImage(imageId)
 	}
 
 	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil && !errors.IsNotFound(err) {

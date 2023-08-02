@@ -8,6 +8,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
+	"github.com/lagrangedao/go-computing-provider/docker"
 	"github.com/lagrangedao/go-computing-provider/models"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
@@ -155,9 +156,8 @@ func watchExpiredTask() {
 						logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
 						return
 					}
-					logs.GetLogger().Infof("redis-key: %s, namespace: %s, spacename: %s, now: %d, expire: %d", key, namespace, spaceName, time.Now().Unix(), expireTime)
 					if time.Now().Unix() > expireTime {
-						logs.GetLogger().Infof("The namespace: %s, spacename: %s, <timer-task> job has reached its runtime and will stop running.", namespace, spaceName)
+						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spacename: %s, the job has expired, and the service starting terminated", key, namespace, spaceName)
 						deleteJob(namespace, spaceName)
 						deleteKey = append(deleteKey, key)
 					}
@@ -173,7 +173,7 @@ func watchExpiredTask() {
 }
 
 func watchNameSpaceForDeleted() {
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(20 * time.Hour)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -201,6 +201,7 @@ func watchNameSpaceForDeleted() {
 					}
 				}
 			}
+			docker.NewDockerService().CleanResource()
 		}
 	}()
 }

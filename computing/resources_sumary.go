@@ -10,16 +10,6 @@ import (
 	"strconv"
 )
 
-const (
-	Nvidia_Gpu_Product string = "nvidia.com/gpu.product"
-	Nvidia_Gpu_Memory  string = "nvidia.com/gpu.memory"
-	Nvidia_Gpu_Count   string = "nvidia.com/gpu.count"
-
-	Nvidia_Gpu_Num string = "nvidia.com/gpu"
-	Cpu_Model      string = "feature.node.kubernetes.io/cpu-model.vendor_id"
-	Arch_Model     string = "beta.kubernetes.io/arch"
-)
-
 func allActivePods(clientSet *kubernetes.Clientset) ([]corev1.Pod, error) {
 	allPods, err := clientSet.CoreV1().Pods("").List(context.TODO(), metaV1.ListOptions{
 		FieldSelector: "status.phase=Running",
@@ -39,7 +29,7 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 
 	var nodeResource = new(models.NodeResource)
 	nodeResource.MachineId = node.Status.NodeInfo.MachineID
-	nodeResource.Model = node.Labels[Arch_Model]
+	nodeResource.Model = node.Status.NodeInfo.Architecture
 
 	for _, pod := range getPodsFromNode(allPods, node) {
 		usedCpu += cpuInPod(&pod)
@@ -62,7 +52,7 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 
 	nodeResource.Storage.Total = fmt.Sprintf("%.2f GiB", float64(node.Status.Allocatable.StorageEphemeral().Value()/1024/1024/1024))
 	nodeResource.Storage.Used = fmt.Sprintf("%.2f GiB", float64(usedStorage/1024/1024/1024))
-	freeStorage := node.Status.Allocatable.Storage().Value() - usedStorage
+	freeStorage := node.Status.Allocatable.StorageEphemeral().Value() - usedStorage
 	nodeResource.Storage.Free = fmt.Sprintf("%.2f GiB", float64(freeStorage/1024/1024/1024))
 
 	return nodeResource, nil
@@ -111,11 +101,4 @@ func memInPod(pod *corev1.Pod) (memCount int64) {
 		memCount += val.Value()
 	}
 	return memCount
-}
-
-func GetNodeRole(node *corev1.Node) string {
-	if _, ok := node.Labels[""]; ok {
-		return "master"
-	}
-	return "node"
 }

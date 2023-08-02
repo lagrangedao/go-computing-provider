@@ -306,10 +306,25 @@ func (ds *DockerService) CleanResource() {
 	danglingFilters.Add("dangling", "true")
 	_, err := ds.c.ImagesPrune(ctx, danglingFilters)
 	if err != nil {
-		logs.GetLogger().Errorf("Failed delete unused image, error: %+v", err)
+		logs.GetLogger().Errorf("Failed delete dangling image, error: %+v", err)
+		return
 	}
 
 	if _, err = ds.c.ContainersPrune(ctx, filters.NewArgs()); err != nil {
 		logs.GetLogger().Errorf("Failed delete unused container, error: %+v", err)
+		return
+	}
+
+	images, err := ds.c.ImageList(context.Background(), types.ImageListOptions{})
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get image list, error: %+v", err)
+		return
+	}
+
+	for _, image := range images {
+		if image.Containers == 0 {
+			logs.GetLogger().Infof("start clean unused image, imageId: %s", image.ID)
+			ds.RemoveImage(image.ID)
+		}
 	}
 }

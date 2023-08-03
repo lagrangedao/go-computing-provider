@@ -230,21 +230,18 @@ func ReNewJob(c *gin.Context) {
 }
 
 func DeleteJob(c *gin.Context) {
-	var deleteJobReq models.DeleteJobReq
-	if err := c.ShouldBindJSON(&deleteJobReq); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	logs.GetLogger().Infof("Job delete req: %+v", deleteJobReq)
-	if deleteJobReq.CreatorWallet == "" {
+	creatorWallet := c.Param("creator_wallet")
+	spaceName := c.Param("space_name")
+
+	if creatorWallet == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
 	}
-	if deleteJobReq.SpaceName == "" {
+	if spaceName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "space_name is required"})
 	}
 
-	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(deleteJobReq.CreatorWallet)
-	deleteJob(k8sNameSpace, deleteJobReq.SpaceName)
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
+	deleteJob(k8sNameSpace, spaceName)
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 

@@ -133,12 +133,37 @@ func RedeployJob(c *gin.Context) {
 	creator, spaceName, err := getSpaceName(jobSourceURI)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get space name: %v", err)
-		return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
 	var hostName string
 	if jobData.JobResultURI != "" {
-		hostName = strings.ReplaceAll(jobData.JobResultURI, "https://", "")
+		resp, err := http.Get(jobData.JobResultURI)
+		if err != nil {
+			logs.GetLogger().Errorf("error making request to Space API: %+v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				logs.GetLogger().Errorf("error closed resp Space API: %+v", err)
+			}
+		}(resp.Body)
+		logs.GetLogger().Infof("Space API response received. Response: %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			logs.GetLogger().Errorf("space API response not OK. Status Code: %d", resp.StatusCode)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+
+		var hostInfo struct {
+			JobResultUri string `json:"job_result_uri"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&hostInfo); err != nil {
+			logs.GetLogger().Errorf("error decoding Space API response JSON: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		hostName = strings.ReplaceAll(hostInfo.JobResultUri, "https://", "")
 	} else {
 		hostName = generateString(10) + conf.GetConfig().API.Domain
 	}
@@ -161,8 +186,6 @@ func RedeployJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
-	logs.GetLogger().Infof("update Job received: %+v", jobData)
-
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -269,8 +292,7 @@ func StatisticalSources(c *gin.Context) {
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
 	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 
-	spaceAPIURL := fmt.Sprintf(jobSourceURI)
-	resp, err := http.Get(spaceAPIURL)
+	resp, err := http.Get(jobSourceURI)
 	if err != nil {
 		logs.GetLogger().Errorf("error making request to Space API: %+v", err)
 		return ""

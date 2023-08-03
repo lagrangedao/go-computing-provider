@@ -716,7 +716,7 @@ func deleteJob(namespace, spaceName string) {
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
 	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete eplicationController, spaceName: %s, error: %+v", spaceName, err)
+		logs.GetLogger().Errorf("Failed delete ReplicaSetsController, spaceName: %s, error: %+v", spaceName, err)
 		return
 	}
 

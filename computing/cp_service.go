@@ -133,17 +133,42 @@ func RedeployJob(c *gin.Context) {
 	creator, spaceName, err := getSpaceName(jobSourceURI)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get space name: %v", err)
-		return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
 	var hostName string
 	if jobData.JobResultURI != "" {
-		hostName = strings.ReplaceAll(jobData.JobResultURI, "https://", "")
+		resp, err := http.Get(jobData.JobResultURI)
+		if err != nil {
+			logs.GetLogger().Errorf("error making request to Space API: %+v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				logs.GetLogger().Errorf("error closed resp Space API: %+v", err)
+			}
+		}(resp.Body)
+		logs.GetLogger().Infof("Space API response received. Response: %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			logs.GetLogger().Errorf("space API response not OK. Status Code: %d", resp.StatusCode)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+
+		var hostInfo struct {
+			JobResultUri string `json:"job_result_uri"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&hostInfo); err != nil {
+			logs.GetLogger().Errorf("error decoding Space API response JSON: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		hostName = strings.ReplaceAll(hostInfo.JobResultUri, "https://", "")
 	} else {
 		hostName = generateString(10) + conf.GetConfig().API.Domain
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -161,8 +186,6 @@ func RedeployJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
-	logs.GetLogger().Infof("update Job received: %+v", jobData)
-
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -230,21 +253,18 @@ func ReNewJob(c *gin.Context) {
 }
 
 func DeleteJob(c *gin.Context) {
-	var deleteJobReq models.DeleteJobReq
-	if err := c.ShouldBindJSON(&deleteJobReq); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	logs.GetLogger().Infof("Job delete req: %+v", deleteJobReq)
-	if deleteJobReq.CreatorWallet == "" {
+	creatorWallet := c.Param("creator_wallet")
+	spaceName := c.Param("space_name")
+
+	if creatorWallet == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
 	}
-	if deleteJobReq.SpaceName == "" {
+	if spaceName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "space_name is required"})
 	}
 
-	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(deleteJobReq.CreatorWallet)
-	deleteJob(k8sNameSpace, deleteJobReq.SpaceName)
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
+	deleteJob(k8sNameSpace, spaceName)
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 
@@ -272,8 +292,7 @@ func StatisticalSources(c *gin.Context) {
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
 	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 
-	spaceAPIURL := fmt.Sprintf(jobSourceURI)
-	resp, err := http.Get(spaceAPIURL)
+	resp, err := http.Get(jobSourceURI)
 	if err != nil {
 		logs.GetLogger().Errorf("error making request to Space API: %+v", err)
 		return ""
@@ -697,7 +716,7 @@ func deleteJob(namespace, spaceName string) {
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
 	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete eplicationController, spaceName: %s, error: %+v", spaceName, err)
+		logs.GetLogger().Errorf("Failed delete ReplicaSetsController, spaceName: %s, error: %+v", spaceName, err)
 		return
 	}
 

@@ -49,7 +49,7 @@ func sendHeartbeat(nodeId string) {
 }
 
 func sendHeartbeats(nodeId string) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	for range ticker.C {
 		sendHeartbeat(nodeId)
 	}

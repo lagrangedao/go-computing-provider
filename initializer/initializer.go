@@ -35,8 +35,8 @@ func sendHeartbeat(nodeId string) {
 		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the LAD server: %v", err)
 		computing.Reconnect(nodeId)
 	} else {
-		body, err := ioutil.ReadAll(resp.Body)
-		logs.GetLogger().Infof("Heartbeat sent. Status code: %d\n %s", resp.StatusCode, string(body))
+		_, err := ioutil.ReadAll(resp.Body)
+		logs.GetLogger().Infof("Heartbeat sent. Status code: %d", resp.StatusCode)
 		if resp.StatusCode != http.StatusOK {
 			logs.GetLogger().Warningln("Retrying to connect to the LAD server")
 			computing.Reconnect(nodeId)

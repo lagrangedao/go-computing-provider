@@ -253,8 +253,8 @@ func ReNewJob(c *gin.Context) {
 }
 
 func DeleteJob(c *gin.Context) {
-	creatorWallet := c.Param("creator_wallet")
-	spaceName := c.Param("space_name")
+	creatorWallet := c.Query("creator_wallet")
+	spaceName := c.Query("space_name")
 
 	if creatorWallet == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})

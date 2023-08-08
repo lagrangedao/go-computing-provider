@@ -317,6 +317,9 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
 	logs.GetLogger().Infof("spaceName: %s, hardwareName: %s", spaceName, spaceHardware.Description)
+	if len(spaceHardware.Description) == 0 {
+		return ""
+	}
 	hardwareInfo := getHardwareDetail(spaceHardware.Description)
 
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)

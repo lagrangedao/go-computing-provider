@@ -208,7 +208,10 @@ func ReNewJob(c *gin.Context) {
 	valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", redisKey, err)
-		return
+		c.JSON(http.StatusOK, map[string]string{
+			"status":  "failed",
+			"message": "The job was terminated due to its expiration date",
+		})
 	}
 
 	var (
@@ -250,6 +253,7 @@ func ReNewJob(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]string{
 		"status": "success",
 	})
+	c.JSON(http.StatusOK, common.CreateSuccessResponse("success"))
 }
 
 func DeleteJob(c *gin.Context) {
@@ -290,6 +294,17 @@ func StatisticalSources(c *gin.Context) {
 }
 
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
+	var gpuName string
+	defer func() {
+		if gpuName != "" {
+			count, ok := runTaskGpuResource.Load(gpuName)
+			if ok && count.(int) > 0 {
+				runTaskGpuResource.Store(gpuName, count.(int)-1)
+			} else {
+				runTaskGpuResource.Delete(gpuName)
+			}
+		}
+	}()
 	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 
 	resp, err := http.Get(jobSourceURI)
@@ -317,7 +332,20 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
 	logs.GetLogger().Infof("spaceName: %s, hardwareName: %s", spaceName, spaceHardware.Description)
+	if len(spaceHardware.Description) == 0 {
+		return ""
+	}
 	hardwareInfo := getHardwareDetail(spaceHardware.Description)
+
+	if hardwareInfo.Gpu.Unit != "" {
+		gpuName = strings.ReplaceAll(hardwareInfo.Gpu.Unit, " ", "-")
+		count, ok := runTaskGpuResource.Load(gpuName)
+		if ok {
+			runTaskGpuResource.Store(gpuName, count.(int)+1)
+		} else {
+			runTaskGpuResource.Store(gpuName, 1)
+		}
+	}
 
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
 	if err != nil {

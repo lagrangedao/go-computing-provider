@@ -14,8 +14,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+var runTaskGpuResource sync.Map
 
 func RunSyncTask() {
 	go func() {
@@ -57,19 +60,19 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("Failed report cp resource's summary, error: %+v", err)
 			}
 		}()
-		ticker := time.NewTicker(120 * time.Second)
-		defer ticker.Stop()
 
-		nodeId, _, _ := generateNodeID()
 		location, err := getLocation()
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
+		nodeId, _, _ := generateNodeID()
 
-		reportClusterResource(location, nodeId)
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for range ticker.C {
 			reportClusterResource(location, nodeId)
 		}
+
 	}()
 
 	watchExpiredTask()

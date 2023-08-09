@@ -1,6 +1,7 @@
 package computing
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -76,7 +77,7 @@ func ReceiveJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
-
+	updateJobStatus(jobData.UUID, models.JobUploadResult)
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -347,6 +348,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 		}
 	}
 
+	updateJobStatus(jobUuid, models.JobDownloadSource)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -358,7 +360,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 	if containsYaml {
 		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, hardwareInfo, duration)
 	} else {
-		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
+		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceName, imagePath)
 		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, hardwareInfo, duration)
 	}
 	return hostName
@@ -469,12 +471,15 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 		logs.GetLogger().Error(err)
 		return
 	}
+
+	updateJobStatus(jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
 	if err := deployK8sResource(k8sNameSpace, spaceName, hostName, containerPort); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
+	updateJobStatus(jobUuid, models.JobDeployToK8s)
 
 	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	return
@@ -645,14 +650,16 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 			logs.GetLogger().Error(err)
 			return
 		}
+
+		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
 		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
+		updateJobStatus(jobUuid, models.JobDeployToK8s)
 
-		// watch running time and release resources when expired
 		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	}
 }
@@ -811,6 +818,42 @@ func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) 
 			}
 		}
 	}()
+}
+
+func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {
+	reqParam := map[string]interface{}{
+		"job_uuid": jobUuid,
+		"status":   jobStatus,
+	}
+
+	payload, err := json.Marshal(reqParam)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
+		return
+	}
+
+	client := &http.Client{}
+	url := conf.GetConfig().LAD.ServerUrl + "/job/status"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		logs.GetLogger().Errorf("Error creating request: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
+		return
+	}
+	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
 }
 
 func generateString(length int) string {

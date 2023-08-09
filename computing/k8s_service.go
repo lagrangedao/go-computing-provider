@@ -308,7 +308,7 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 	}
 
 	for _, node := range nodes.Items {
-		nodeResource, err := getNodeResource(activePods, &node)
+		nodeGpu, nodeResource, err := getNodeResource(activePods, &node)
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
@@ -322,7 +322,45 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				logs.GetLogger().Error(err)
 				return nil, err
 			}
-			nodeResource.Gpu = gpuInfo.Gpu
+
+			var count int64
+			middleGpu := make([]models.GpuDetail, 0)
+			for _, gpuDetail := range gpuInfo.Gpu.Details {
+				newDetail := gpuDetail
+				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
+				if num, ok := nodeGpu[gpuName]; ok {
+					if num > 0 && count <= num {
+						newDetail.Status = models.Occupied
+						count++
+					} else {
+						newDetail.Status = models.Available
+					}
+				} else {
+					newDetail.Status = models.Available
+				}
+				middleGpu = append(middleGpu, newDetail)
+			}
+
+			newGpu := make([]models.GpuDetail, 0)
+			count = 0
+			for _, gpuDetail := range middleGpu {
+				newDetail := gpuDetail
+				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
+				if gNum, ok := runTaskGpuResource.Load(gpuName); ok {
+					if gNum.(int) > 0 && int(count) <= gNum.(int) && newDetail.Status == models.Available {
+						newDetail.Status = models.Occupied
+						count++
+					}
+				}
+				newGpu = append(newGpu, newDetail)
+			}
+
+			nodeResource.Gpu = models.Gpu{
+				DriverVersion: gpuInfo.Gpu.DriverVersion,
+				CudaVersion:   gpuInfo.Gpu.CudaVersion,
+				AttachedGpus:  gpuInfo.Gpu.AttachedGpus,
+				Details:       newGpu,
+			}
 		}
 		nodeList = append(nodeList, nodeResource)
 	}

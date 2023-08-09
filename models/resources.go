@@ -24,9 +24,10 @@ type Gpu struct {
 }
 
 type GpuDetail struct {
-	ProductName     string `json:"product_name"`
-	FbMemoryUsage   Common `json:"fb_memory_usage"`
-	Bar1MemoryUsage Common `json:"bar1_memory_usage"`
+	ProductName     string    `json:"product_name"`
+	Status          GpuStatus `json:"status"`
+	FbMemoryUsage   Common    `json:"fb_memory_usage"`
+	Bar1MemoryUsage Common    `json:"bar1_memory_usage"`
 }
 
 type Common struct {
@@ -39,3 +40,12 @@ type ResourceStatus struct {
 	Request  int64
 	Capacity int64
 }
+
+type GpuStatus string
+
+const (
+	Occupied  GpuStatus = "occupied"
+	Available GpuStatus = "available"
+
+	DefaultGpuSize string = "0 MiB"
+)

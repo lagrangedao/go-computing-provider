@@ -25,12 +25,20 @@ func Reconnect(nodeID string) string {
 
 func updateProviderInfo(nodeID string, peerID string, address string) {
 	updateURL := conf.GetConfig().LAD.ServerUrl + "/cp"
-	cpName, _ := os.Hostname()
+
+	var cpName string
+	if conf.GetConfig().API.NodeName != "" {
+		cpName = conf.GetConfig().API.NodeName
+	} else {
+		cpName, _ = os.Hostname()
+	}
+
 	provider := models.ComputingProvider{
 		Name:         cpName,
 		NodeId:       nodeID,
 		MultiAddress: conf.GetConfig().API.MultiAddress,
 		Autobid:      1,
+		BidStatus:    models.BidEnabledStatus,
 	}
 
 	jsonData, err := json.Marshal(provider)

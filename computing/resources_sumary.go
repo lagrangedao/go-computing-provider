@@ -20,12 +20,13 @@ func allActivePods(clientSet *kubernetes.Clientset) ([]corev1.Pod, error) {
 	return allPods.Items, nil
 }
 
-func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResource, error) {
+func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (map[string]int64, *models.NodeResource, error) {
 	var (
 		usedCpu     int64
 		usedMem     int64
 		usedStorage int64
 	)
+	nodeGpu := make(map[string]int64)
 
 	var nodeResource = new(models.NodeResource)
 	nodeResource.MachineId = node.Status.NodeInfo.MachineID
@@ -35,6 +36,13 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 		usedCpu += cpuInPod(&pod)
 		usedMem += memInPod(&pod)
 		usedStorage += storageInPod(&pod)
+
+		gpuName, count := gpuInPod(&pod)
+		if v, ok := nodeGpu[gpuName]; ok {
+			nodeGpu[gpuName] = v + count
+		} else {
+			nodeGpu[gpuName] = count
+		}
 	}
 
 	nodeResource.Cpu.Total = strconv.FormatInt(node.Status.Capacity.Cpu().Value(), 10)
@@ -55,7 +63,7 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (*models.NodeResou
 	freeStorage := node.Status.Allocatable.StorageEphemeral().Value() - usedStorage
 	nodeResource.Storage.Free = fmt.Sprintf("%.2f GiB", float64(freeStorage/1024/1024/1024))
 
-	return nodeResource, nil
+	return nodeGpu, nodeResource, nil
 }
 
 func getPodsFromNode(allPods []corev1.Pod, node *corev1.Node) (pods []corev1.Pod) {
@@ -101,4 +109,23 @@ func memInPod(pod *corev1.Pod) (memCount int64) {
 		memCount += val.Value()
 	}
 	return memCount
+}
+
+func gpuInPod(pod *corev1.Pod) (gpuName string, gpuCount int64) {
+	containers := pod.Spec.Containers
+	for _, container := range containers {
+		val, ok := container.Resources.Requests["nvidia.com/gpu"]
+		if !ok {
+			continue
+		}
+		gpuCount += val.Value()
+	}
+
+	for k, _ := range pod.Spec.NodeSelector {
+		if k != "" {
+			gpuName = k
+		}
+	}
+
+	return gpuName, gpuCount
 }

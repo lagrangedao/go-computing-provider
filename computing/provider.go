@@ -19,11 +19,11 @@ import (
 )
 
 func Reconnect(nodeID string) string {
-	updateProviderInfo(nodeID, "", "")
+	updateProviderInfo(nodeID, "", "", models.ActiveStatus)
 	return nodeID
 }
 
-func updateProviderInfo(nodeID string, peerID string, address string) {
+func updateProviderInfo(nodeID, peerID, address string, status string) {
 	updateURL := conf.GetConfig().LAD.ServerUrl + "/cp"
 
 	var cpName string
@@ -38,7 +38,7 @@ func updateProviderInfo(nodeID string, peerID string, address string) {
 		NodeId:       nodeID,
 		MultiAddress: conf.GetConfig().API.MultiAddress,
 		Autobid:      1,
-		BidStatus:    models.BidEnabledStatus,
+		Status:       status,
 	}
 
 	jsonData, err := json.Marshal(provider)
@@ -81,7 +81,7 @@ func InitComputingProvider() string {
 	logs.GetLogger().Infof("Node ID :%s Peer ID:%s address:%s",
 		nodeID,
 		peerID, address)
-	updateProviderInfo(nodeID, peerID, address)
+	updateProviderInfo(nodeID, peerID, address, models.ActiveStatus)
 	return nodeID
 }
 func generateNodeID() (string, string, string) {

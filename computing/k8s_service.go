@@ -308,11 +308,7 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 	}
 
 	for _, node := range nodes.Items {
-		nodeGpu, nodeResource, err := getNodeResource(activePods, &node)
-		if err != nil {
-			logs.GetLogger().Error(err)
-		}
-
+		nodeGpu, _, nodeResource := getNodeResource(activePods, &node)
 		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
 			var gpuInfo struct {
 				Gpu models.Gpu `json:"gpu"`

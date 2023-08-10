@@ -19,20 +19,32 @@ import (
 )
 
 var runTaskGpuResource sync.Map
+var deployingChan = make(chan models.Job, 10)
 
 type ScheduleTask struct {
-	DeployingChan chan models.Job
+	TaskMap sync.Map
 }
 
 func NewScheduleTask() *ScheduleTask {
-	return &ScheduleTask{
-		DeployingChan: make(chan models.Job, 10),
-	}
+	return &ScheduleTask{}
 }
 
 func (s *ScheduleTask) Run() {
-	for job := range s.DeployingChan {
-		reportJobStatus(job.Uuid, job.Status)
+	for {
+		select {
+		case job := <-deployingChan:
+			s.TaskMap.Store(job.Uuid, job.Status)
+		case <-time.After(15 * time.Second):
+			s.TaskMap.Range(func(key, value any) bool {
+				jobUuid := key.(string)
+				jobStatus := value.(models.JobStatus)
+				reportJobStatus(jobUuid, jobStatus)
+				if jobStatus == models.JobDeployToK8s {
+					s.TaskMap.Delete(jobUuid)
+				}
+				return true
+			})
+		}
 	}
 }
 
@@ -123,6 +135,28 @@ func RunSyncTask() {
 		defer ticker.Stop()
 		for range ticker.C {
 			reportClusterResource(location, nodeId)
+		}
+
+	}()
+
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("Failed report provider bid status, error: %+v", err)
+			}
+		}()
+		nodeId, _, _ := generateNodeID()
+
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			providerStatus, err := checkClusterProviderStatus()
+			if err != nil {
+				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
+				return
+			}
+			updateProviderInfo(nodeId, "", "", providerStatus)
 		}
 
 	}()

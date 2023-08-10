@@ -24,7 +24,7 @@ func Reconnect(nodeID string) string {
 }
 
 func updateProviderInfo(nodeID, peerID, address string, status string) {
-	updateURL := conf.GetConfig().LAD.ServerUrl + "/cp"
+	updateURL := conf.GetConfig().LAG.ServerUrl + "/cp"
 
 	var cpName string
 	if conf.GetConfig().API.NodeName != "" {
@@ -56,7 +56,7 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 
 	// Set the content type and API token in the request header
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 
 	resp, err := client.Do(req)
 	if err != nil {

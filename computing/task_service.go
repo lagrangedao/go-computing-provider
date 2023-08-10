@@ -61,13 +61,13 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	}
 
 	client := &http.Client{}
-	url := conf.GetConfig().LAD.ServerUrl + "/job/status"
+	url := conf.GetConfig().LAG.ServerUrl + "/job/status"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
@@ -185,13 +185,13 @@ func reportClusterResource(location, nodeId string) {
 	}
 
 	client := &http.Client{}
-	url := conf.GetConfig().LAD.ServerUrl + "/cp/summary"
+	url := conf.GetConfig().LAG.ServerUrl + "/cp/summary"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := client.Do(req)

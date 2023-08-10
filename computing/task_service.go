@@ -156,6 +156,7 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
 				return
 			}
+			logs.GetLogger().Infof("provider status: %s", providerStatus)
 			updateProviderInfo(nodeId, "", "", providerStatus)
 		}
 

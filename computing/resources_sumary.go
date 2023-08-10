@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -169,6 +170,25 @@ func checkClusterProviderStatus() (string, error) {
 		return "", err
 	}
 
+	collectGpu := make(map[string]int64)
+	nodeGpuInfoMap, err := service.GetPodLog(context.TODO())
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return "", err
+	}
+	for _, gpu := range nodeGpuInfoMap {
+		var gpuInfo struct {
+			Gpu models.Gpu `json:"gpu"`
+		}
+		err := json.Unmarshal([]byte(gpu.String()), &gpuInfo)
+		if err != nil {
+			continue
+		}
+		for _, gpuDetail := range gpuInfo.Gpu.Details {
+			collectGpu[gpuDetail.ProductName] = collectGpu[gpuDetail.ProductName] + 1
+		}
+	}
+
 	nodeGpu := make(map[string]int64)
 	nodeResource := make(map[string]int64)
 	for _, node := range nodes.Items {
@@ -181,9 +201,15 @@ func checkClusterProviderStatus() (string, error) {
 		}
 	}
 
+	remainGpu := make(map[string]int64)
+	for name, num := range collectGpu {
+		gpuName := strings.ReplaceAll(name, " ", "-")
+		remainGpu[gpuName] = num - nodeGpu[gpuName]
+	}
+
 	var gpuFlag bool
 	for _, g := range policy.Gpu {
-		if nodeGpu[g.Name] > g.Quota {
+		if remainGpu[g.Name] > g.Quota {
 			gpuFlag = true
 			break
 		}

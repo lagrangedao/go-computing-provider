@@ -209,7 +209,8 @@ func checkClusterProviderStatus() (string, error) {
 
 	var gpuFlag bool
 	for _, g := range policy.Gpu {
-		if remainGpu[g.Name] > g.Quota {
+		upperName := strings.ReplaceAll(g.Name, "Nvidia", "NVIDIA")
+		if remainGpu[upperName] > g.Quota {
 			gpuFlag = true
 			break
 		}

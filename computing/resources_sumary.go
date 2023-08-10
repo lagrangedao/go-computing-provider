@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 const (
@@ -136,12 +135,13 @@ func gpuInPod(pod *corev1.Pod) (gpuName string, gpuCount int64) {
 		gpuCount += val.Value()
 	}
 
-	for k := range pod.Spec.NodeSelector {
-		if k != "" {
-			gpuName = k[:strings.Index(k, "=true")]
+	if pod.Spec.NodeSelector != nil {
+		for k := range pod.Spec.NodeSelector {
+			if k != "" {
+				gpuName = k
+			}
 		}
 	}
-
 	return gpuName, gpuCount
 }
 

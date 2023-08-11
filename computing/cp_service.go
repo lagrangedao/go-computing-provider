@@ -863,12 +863,13 @@ func getLocation() (string, error) {
 		CountryCode string `json:"countryCode"`
 		City        string `json:"city"`
 		Region      string `json:"region"`
+		RegionName  string `json:"regionName"`
 	}
 	if err = json.Unmarshal(body, &ipInfo); err != nil {
 		return "", err
 	}
 
-	return ipInfo.CountryCode + "-" + ipInfo.Region, nil
+	return strings.TrimSpace(ipInfo.RegionName) + "-" + ipInfo.CountryCode, nil
 }
 
 func getLocalIPAddress() (string, error) {

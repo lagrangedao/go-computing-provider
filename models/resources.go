@@ -49,19 +49,21 @@ const (
 )
 
 type ResourcePolicy struct {
-	Cpu struct {
-		Quota int64 `json:"quota"`
-	} `json:"cpu"`
-	Gpu []struct {
-		Name  string `json:"name"`
-		Quota int64  `json:"quota"`
-	} `json:"gpu"`
-	Memory struct {
-		Quota int64  `json:"quota"`
-		Unit  string `json:"unit"`
-	} `json:"memory"`
-	Storage struct {
-		Quota int64  `json:"quota"`
-		Unit  string `json:"unit"`
-	} `json:"storage"`
+	Cpu     CpuQuota   `json:"cpu"`
+	Gpu     []GpuQuota `json:"gpu"`
+	Memory  Quota      `json:"memory"`
+	Storage Quota      `json:"storage"`
+}
+
+type CpuQuota struct {
+	Quota int64 `json:"quota"`
+}
+
+type GpuQuota struct {
+	Name  string `json:"name"`
+	Quota int64  `json:"quota"`
+}
+type Quota struct {
+	Quota int64  `json:"quota"`
+	Unit  string `json:"unit"`
 }

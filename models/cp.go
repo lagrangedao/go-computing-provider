@@ -1,11 +1,23 @@
 package models
 
+type BidStatus string
+
+const (
+	BidDisabledStatus    BidStatus = "bidding_disabled"
+	BidEnabledStatus     BidStatus = "bidding_enabled"
+	BidGpuDisabledStatus BidStatus = "bidding_gpu_disabled"
+
+	ActiveStatus   string = "Active"
+	InactiveStatus string = "Inactive"
+)
+
 type ComputingProvider struct {
 	Name          string `json:"name"`
 	NodeId        string `json:"node_id"`
 	MultiAddress  string `json:"multi_address"`
 	Autobid       int    `json:"autobid"`
 	WalletAddress int    `json:"wallet_address"`
+	Status        string `json:"status"`
 }
 
 type JobData struct {
@@ -21,6 +33,22 @@ type JobData struct {
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
 }
+
+type Job struct {
+	Uuid   string
+	Status JobStatus
+}
+
+type JobStatus string
+
+const (
+	JobDownloadSource JobStatus = "downloadSource" // download file form job_resource_uri
+	JobUploadResult   JobStatus = "uploadResult"   // upload task result to mcs
+	JobBuildImage     JobStatus = "buildImage"     // build images
+	JobPushImage      JobStatus = "pushImage"      // push image to registry
+	JobPullImage      JobStatus = "pullImage"      // download file form job_resource_uri
+	JobDeployToK8s    JobStatus = "deployToK8s"    // deploy image to k8s
+)
 
 type DeleteJobReq struct {
 	CreatorWallet string `json:"creator_wallet"`

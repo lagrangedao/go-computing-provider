@@ -75,7 +75,8 @@ func BuildSpaceTaskImage(spaceName string, files []models.SpaceFile) (bool, stri
 	return false, "", "", NotFoundError
 }
 
-func BuildImagesByDockerfile(spaceName, imagePath string) (string, string) {
+func BuildImagesByDockerfile(jobUuid, spaceName, imagePath string) (string, string) {
+	updateJobStatus(jobUuid, models.JobBuildImage)
 	imageName := fmt.Sprintf("lagrange/%s:%d", spaceName, time.Now().Unix())
 	if conf.GetConfig().Registry.ServerAddress != "" {
 		imageName = fmt.Sprintf("%s/%s:%d",
@@ -92,6 +93,7 @@ func BuildImagesByDockerfile(spaceName, imagePath string) (string, string) {
 	}
 
 	if conf.GetConfig().Registry.ServerAddress != "" {
+		updateJobStatus(jobUuid, models.JobPushImage)
 		if err := dockerService.PushImage(imageName); err != nil {
 			logs.GetLogger().Errorf("Error Docker push image: %v", err)
 			return "", ""

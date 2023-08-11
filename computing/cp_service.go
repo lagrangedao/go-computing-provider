@@ -76,7 +76,7 @@ func ReceiveJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
-
+	updateJobStatus(jobData.UUID, models.JobUploadResult)
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -208,7 +208,10 @@ func ReNewJob(c *gin.Context) {
 	valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", redisKey, err)
-		return
+		c.JSON(http.StatusOK, map[string]string{
+			"status":  "failed",
+			"message": "The job was terminated due to its expiration date",
+		})
 	}
 
 	var (
@@ -250,6 +253,7 @@ func ReNewJob(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]string{
 		"status": "success",
 	})
+	c.JSON(http.StatusOK, common.CreateSuccessResponse("success"))
 }
 
 func DeleteJob(c *gin.Context) {
@@ -290,6 +294,17 @@ func StatisticalSources(c *gin.Context) {
 }
 
 func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
+	var gpuName string
+	defer func() {
+		if gpuName != "" {
+			count, ok := runTaskGpuResource.Load(gpuName)
+			if ok && count.(int) > 0 {
+				runTaskGpuResource.Store(gpuName, count.(int)-1)
+			} else {
+				runTaskGpuResource.Delete(gpuName)
+			}
+		}
+	}()
 	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 
 	resp, err := http.Get(jobSourceURI)
@@ -322,6 +337,17 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 	}
 	hardwareInfo := getHardwareDetail(spaceHardware.Description)
 
+	if hardwareInfo.Gpu.Unit != "" {
+		gpuName = strings.ReplaceAll(hardwareInfo.Gpu.Unit, " ", "-")
+		count, ok := runTaskGpuResource.Load(gpuName)
+		if ok {
+			runTaskGpuResource.Store(gpuName, count.(int)+1)
+		} else {
+			runTaskGpuResource.Store(gpuName, 1)
+		}
+	}
+
+	updateJobStatus(jobUuid, models.JobDownloadSource)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -333,7 +359,7 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 	if containsYaml {
 		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, hardwareInfo, duration)
 	} else {
-		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
+		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceName, imagePath)
 		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, hardwareInfo, duration)
 	}
 	return hostName
@@ -444,12 +470,15 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 		logs.GetLogger().Error(err)
 		return
 	}
+
+	updateJobStatus(jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
 	if err := deployK8sResource(k8sNameSpace, spaceName, hostName, containerPort); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
+	updateJobStatus(jobUuid, models.JobDeployToK8s)
 
 	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	return
@@ -620,14 +649,16 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 			logs.GetLogger().Error(err)
 			return
 		}
+
+		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
 		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
+		updateJobStatus(jobUuid, models.JobDeployToK8s)
 
-		// watch running time and release resources when expired
 		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	}
 }
@@ -784,6 +815,15 @@ func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) 
 			case error:
 				return
 			}
+		}
+	}()
+}
+
+func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {
+	go func() {
+		deployingChan <- models.Job{
+			Uuid:   jobUuid,
+			Status: jobStatus,
 		}
 	}()
 }

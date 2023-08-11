@@ -308,11 +308,9 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 	}
 
 	for _, node := range nodes.Items {
-		nodeResource, err := getNodeResource(activePods, &node)
-		if err != nil {
-			logs.GetLogger().Error(err)
-		}
+		nodeGpu, _, nodeResource := getNodeResource(activePods, &node)
 
+		collectGpu := make(map[string]collectGpuInfo)
 		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
 			var gpuInfo struct {
 				Gpu models.Gpu `json:"gpu"`
@@ -322,7 +320,55 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				logs.GetLogger().Error(err)
 				return nil, err
 			}
-			nodeResource.Gpu = gpuInfo.Gpu
+
+			for index, gpuDetail := range gpuInfo.Gpu.Details {
+				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
+				if v, ok := collectGpu[gpuName]; ok {
+					v.count += 1
+					collectGpu[gpuName] = v
+				} else {
+					collectGpu[gpuName] = collectGpuInfo{
+						index,
+						1,
+						0,
+					}
+				}
+			}
+
+			for name, info := range collectGpu {
+				runCount := int(nodeGpu[name])
+				if num, ok := runTaskGpuResource.Load(name); ok {
+					runCount += num.(int)
+				}
+
+				if runCount < info.count {
+					info.remainNum = info.count - runCount
+				} else {
+					info.remainNum = 0
+				}
+				collectGpu[name] = info
+			}
+
+			var count int
+			newGpu := make([]models.GpuDetail, 0)
+			for _, gpuDetail := range gpuInfo.Gpu.Details {
+				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
+				newDetail := gpuDetail
+				g := collectGpu[gpuName]
+				if g.remainNum > 0 && count != g.remainNum {
+					newDetail.Status = models.Available
+					count++
+				} else {
+					newDetail.Status = models.Occupied
+				}
+				newGpu = append(newGpu, newDetail)
+			}
+			nodeResource.Gpu = models.Gpu{
+				DriverVersion: gpuInfo.Gpu.DriverVersion,
+				CudaVersion:   gpuInfo.Gpu.CudaVersion,
+				AttachedGpus:  gpuInfo.Gpu.AttachedGpus,
+				Details:       newGpu,
+			}
 		}
 		nodeList = append(nodeList, nodeResource)
 	}
@@ -452,4 +498,10 @@ func parseKubernetesVersion(version string) (*kubernetesVersion, error) {
 	}
 
 	return v, nil
+}
+
+type collectGpuInfo struct {
+	index     int
+	count     int
+	remainNum int
 }

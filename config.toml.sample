@@ -1,23 +1,23 @@
 [API]
-Port = 8085                                   # The port number that the web server listens on
-MultiAddress = "/ip4/127.0.0.1/tcp/8085"      # The multiAddress for libp2p
-Domain = ""                                   # The domain
+Port = 8085                                     # The port number that the web server listens on
+MultiAddress = "/ip4/<public_ip>/tcp/<port>"    # The multiAddress for libp2p
+Domain = ""                                     # The domain name
 
 RedisUrl = "redis://127.0.0.1:6379"           # The redis server address
 RedisPassword = ""                            # The redis server access password
 
-[LAD]
+[LAG]
 ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
-AccessToken = ""                              # Access token applied by lagrangedao.org
+AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
 
 [MCS]
-ApiKey = ""                                   # The MCS API_KEY
-AccessToken = ""                              # The MCS API_KEY
-BucketName = ""                               # The MCS bucket name
+ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
+AccessToken = ""                              # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
+BucketName = ""                               # Acquired from "https://www.multichain.storage" -> bucket -> Add Bucket
 Network = "polygon.mainnet"                   # polygon.mainnet for mainnet, polygon.mumbai for testnet
-FileCachePath = ""                            # Cache directory of job task raw data
+FileCachePath = "/tmp"                            # Cache directory of job data
 
 [Registry]
-ServerAddress = "https://hub.docker.com/"     # The docker container image registry address
-UserName = ""                                 # The login username
-Password = ""                                 # The login password
+ServerAddress = ""                            # The docker container image registry address, if only a single node, you can ignore
+UserName = ""                                 # The login username, if only a single node, you can ignore
+Password = ""                                 # The login password, if only a single node, you can ignore

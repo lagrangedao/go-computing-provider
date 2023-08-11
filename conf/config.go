@@ -14,7 +14,7 @@ var config *ComputeNode
 // ComputeNode is a compute node config
 type ComputeNode struct {
 	API      API
-	LAD      LAD
+	LAG      LAG
 	MCS      MCS
 	Registry Registry
 }
@@ -25,9 +25,10 @@ type API struct {
 	RedisUrl      string
 	RedisPassword string
 	Domain        string
+	NodeName      string
 }
 
-type LAD struct {
+type LAG struct {
 	ServerUrl   string
 	AccessToken string
 }
@@ -67,7 +68,7 @@ func GetConfig() *ComputeNode {
 func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 	requiredFields := [][]string{
 		{"API"},
-		{"LAD"},
+		{"LAG"},
 		{"MCS"},
 		{"Registry"},
 
@@ -75,8 +76,8 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 		{"API", "Domain"},
 		{"API", "RedisUrl"},
 
-		{"LAD", "ServerUrl"},
-		{"LAD", "AccessToken"},
+		{"LAG", "ServerUrl"},
+		{"LAG", "AccessToken"},
 
 		{"MCS", "ApiKey"},
 		{"MCS", "AccessToken"},

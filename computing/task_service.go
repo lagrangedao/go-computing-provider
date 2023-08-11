@@ -14,8 +14,75 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+var runTaskGpuResource sync.Map
+var deployingChan = make(chan models.Job, 10)
+
+type ScheduleTask struct {
+	TaskMap sync.Map
+}
+
+func NewScheduleTask() *ScheduleTask {
+	return &ScheduleTask{}
+}
+
+func (s *ScheduleTask) Run() {
+	for {
+		select {
+		case job := <-deployingChan:
+			s.TaskMap.Store(job.Uuid, job.Status)
+		case <-time.After(15 * time.Second):
+			s.TaskMap.Range(func(key, value any) bool {
+				jobUuid := key.(string)
+				jobStatus := value.(models.JobStatus)
+				reportJobStatus(jobUuid, jobStatus)
+				if jobStatus == models.JobDeployToK8s {
+					s.TaskMap.Delete(jobUuid)
+				}
+				return true
+			})
+		}
+	}
+}
+
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
+	reqParam := map[string]interface{}{
+		"job_uuid": jobUuid,
+		"status":   jobStatus,
+	}
+
+	payload, err := json.Marshal(reqParam)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
+		return
+	}
+
+	client := &http.Client{}
+	url := conf.GetConfig().LAG.ServerUrl + "/job/status"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		logs.GetLogger().Errorf("Error creating request: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
+		return
+	}
+	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+}
 
 func RunSyncTask() {
 	go func() {
@@ -57,19 +124,42 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("Failed report cp resource's summary, error: %+v", err)
 			}
 		}()
-		ticker := time.NewTicker(120 * time.Second)
-		defer ticker.Stop()
 
-		nodeId, _, _ := generateNodeID()
 		location, err := getLocation()
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
+		nodeId, _, _ := generateNodeID()
 
-		reportClusterResource(location, nodeId)
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for range ticker.C {
 			reportClusterResource(location, nodeId)
 		}
+
+	}()
+
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("Failed report provider bid status, error: %+v", err)
+			}
+		}()
+		nodeId, _, _ := generateNodeID()
+
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			providerStatus, err := checkClusterProviderStatus()
+			if err != nil {
+				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
+				return
+			}
+			logs.GetLogger().Infof("provider status: %s", providerStatus)
+			updateProviderInfo(nodeId, "", "", providerStatus)
+		}
+
 	}()
 
 	watchExpiredTask()
@@ -96,13 +186,13 @@ func reportClusterResource(location, nodeId string) {
 	}
 
 	client := &http.Client{}
-	url := conf.GetConfig().LAD.ServerUrl + "/cp/summary"
+	url := conf.GetConfig().LAG.ServerUrl + "/cp/summary"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := client.Do(req)

@@ -25,6 +25,7 @@ type API struct {
 	RedisUrl      string
 	RedisPassword string
 	Domain        string
+	NodeName      string
 }
 
 type LAD struct {

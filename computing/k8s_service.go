@@ -349,15 +349,15 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				collectGpu[name] = info
 			}
 
-			var count int
+			var counter = make(map[string]int)
 			newGpu := make([]models.GpuDetail, 0)
 			for _, gpuDetail := range gpuInfo.Gpu.Details {
 				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
 				newDetail := gpuDetail
 				g := collectGpu[gpuName]
-				if g.remainNum > 0 && count != g.remainNum {
+				if g.remainNum > 0 && counter[gpuName] < g.remainNum {
 					newDetail.Status = models.Available
-					count++
+					counter[gpuName] += 1
 				} else {
 					newDetail.Status = models.Occupied
 				}

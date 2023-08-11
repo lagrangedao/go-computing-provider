@@ -46,6 +46,24 @@ type GpuStatus string
 const (
 	Occupied  GpuStatus = "occupied"
 	Available GpuStatus = "available"
-
-	DefaultGpuSize string = "0 MiB"
 )
+
+type ResourcePolicy struct {
+	Cpu     CpuQuota   `json:"cpu"`
+	Gpu     []GpuQuota `json:"gpu"`
+	Memory  Quota      `json:"memory"`
+	Storage Quota      `json:"storage"`
+}
+
+type CpuQuota struct {
+	Quota int64 `json:"quota"`
+}
+
+type GpuQuota struct {
+	Name  string `json:"name"`
+	Quota int64  `json:"quota"`
+}
+type Quota struct {
+	Quota int64  `json:"quota"`
+	Unit  string `json:"unit"`
+}

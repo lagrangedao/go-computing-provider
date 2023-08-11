@@ -6,15 +6,18 @@ const (
 	BidDisabledStatus    BidStatus = "bidding_disabled"
 	BidEnabledStatus     BidStatus = "bidding_enabled"
 	BidGpuDisabledStatus BidStatus = "bidding_gpu_disabled"
+
+	ActiveStatus   string = "Active"
+	InactiveStatus string = "Inactive"
 )
 
 type ComputingProvider struct {
-	Name          string    `json:"name"`
-	NodeId        string    `json:"node_id"`
-	MultiAddress  string    `json:"multi_address"`
-	Autobid       int       `json:"autobid"`
-	WalletAddress int       `json:"wallet_address"`
-	BidStatus     BidStatus `json:"bid_status"`
+	Name          string `json:"name"`
+	NodeId        string `json:"node_id"`
+	MultiAddress  string `json:"multi_address"`
+	Autobid       int    `json:"autobid"`
+	WalletAddress int    `json:"wallet_address"`
+	Status        string `json:"status"`
 }
 
 type JobData struct {

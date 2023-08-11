@@ -1,7 +1,6 @@
 package computing
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -821,39 +820,12 @@ func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) 
 }
 
 func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {
-	reqParam := map[string]interface{}{
-		"job_uuid": jobUuid,
-		"status":   jobStatus,
-	}
-
-	payload, err := json.Marshal(reqParam)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
-		return
-	}
-
-	client := &http.Client{}
-	url := conf.GetConfig().LAD.ServerUrl + "/job/status"
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
-	if err != nil {
-		logs.GetLogger().Errorf("Error creating request: %v", err)
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
-	req.Header.Add("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
-		return
-	}
-	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+	go func() {
+		deployingChan <- models.Job{
+			Uuid:   jobUuid,
+			Status: jobStatus,
+		}
+	}()
 }
 
 func generateString(length int) string {
@@ -891,12 +863,13 @@ func getLocation() (string, error) {
 		CountryCode string `json:"countryCode"`
 		City        string `json:"city"`
 		Region      string `json:"region"`
+		RegionName  string `json:"regionName"`
 	}
 	if err = json.Unmarshal(body, &ipInfo); err != nil {
 		return "", err
 	}
 
-	return ipInfo.CountryCode + "-" + ipInfo.Region, nil
+	return strings.TrimSpace(ipInfo.RegionName) + "-" + ipInfo.CountryCode, nil
 }
 
 func getLocalIPAddress() (string, error) {

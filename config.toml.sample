@@ -8,7 +8,7 @@ RedisPassword = ""                            # The redis server access password
 
 [LAG]
 ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
-AccessToken = ""                              # Access token applied by lagrangedao.org
+AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
 
 [MCS]
 ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key

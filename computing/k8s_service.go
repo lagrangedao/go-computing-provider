@@ -309,6 +309,8 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 
 	for _, node := range nodes.Items {
 		nodeGpu, _, nodeResource := getNodeResource(activePods, &node)
+
+		collectGpu := make(map[string]collectGpuInfo)
 		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
 			var gpuInfo struct {
 				Gpu models.Gpu `json:"gpu"`
@@ -319,38 +321,48 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				return nil, err
 			}
 
-			var count int64
-			middleGpu := make([]models.GpuDetail, 0)
-			for _, gpuDetail := range gpuInfo.Gpu.Details {
-				newDetail := gpuDetail
+			for index, gpuDetail := range gpuInfo.Gpu.Details {
 				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
-				if num, ok := nodeGpu[gpuName]; ok {
-					if num > 0 && count <= num {
-						newDetail.Status = models.Occupied
-						count++
-					} else {
-						newDetail.Status = models.Available
-					}
+				if v, ok := collectGpu[gpuName]; ok {
+					v.count += 1
+					collectGpu[gpuName] = v
 				} else {
-					newDetail.Status = models.Available
+					collectGpu[gpuName] = collectGpuInfo{
+						index,
+						1,
+						0,
+					}
 				}
-				middleGpu = append(middleGpu, newDetail)
 			}
 
+			for name, info := range collectGpu {
+				runCount := int(nodeGpu[name])
+				if num, ok := runTaskGpuResource.Load(name); ok {
+					runCount += num.(int)
+				}
+
+				if runCount < info.count {
+					info.remainNum = info.count - runCount
+				} else {
+					info.remainNum = 0
+				}
+				collectGpu[name] = info
+			}
+
+			var count int
 			newGpu := make([]models.GpuDetail, 0)
-			count = 0
-			for _, gpuDetail := range middleGpu {
-				newDetail := gpuDetail
+			for _, gpuDetail := range gpuInfo.Gpu.Details {
 				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
-				if gNum, ok := runTaskGpuResource.Load(gpuName); ok {
-					if gNum.(int) > 0 && int(count) <= gNum.(int) && newDetail.Status == models.Available {
-						newDetail.Status = models.Occupied
-						count++
-					}
+				newDetail := gpuDetail
+				g := collectGpu[gpuName]
+				if g.remainNum > 0 && count != g.remainNum {
+					newDetail.Status = models.Available
+					count++
+				} else {
+					newDetail.Status = models.Occupied
 				}
 				newGpu = append(newGpu, newDetail)
 			}
-
 			nodeResource.Gpu = models.Gpu{
 				DriverVersion: gpuInfo.Gpu.DriverVersion,
 				CudaVersion:   gpuInfo.Gpu.CudaVersion,
@@ -486,4 +498,10 @@ func parseKubernetesVersion(version string) (*kubernetesVersion, error) {
 	}
 
 	return v, nil
+}
+
+type collectGpuInfo struct {
+	index     int
+	count     int
+	remainNum int
 }

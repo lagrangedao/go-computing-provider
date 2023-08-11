@@ -148,15 +148,16 @@ func gpuInPod(pod *corev1.Pod) (gpuName string, gpuCount int64) {
 
 func checkClusterProviderStatus() (string, error) {
 
+	var policy models.ResourcePolicy
 	currentDir, _ := os.Getwd()
 	resourcePolicy := filepath.Join(currentDir, "resource_policy.json")
 	bytes, err := os.ReadFile(resourcePolicy)
 	if err != nil {
-		return "", err
-	}
-	var policy models.ResourcePolicy
-	if err = json.Unmarshal(bytes, &policy); err != nil {
-		return "", err
+		policy = defaultResourcePolicy()
+	} else {
+		if err = json.Unmarshal(bytes, &policy); err != nil {
+			return "", err
+		}
 	}
 
 	service := NewK8sService()
@@ -229,5 +230,78 @@ func checkClusterProviderStatus() (string, error) {
 		} else {
 			return models.InactiveStatus, nil
 		}
+	}
+}
+
+func defaultResourcePolicy() models.ResourcePolicy {
+	return models.ResourcePolicy{
+		Cpu: models.CpuQuota{
+			Quota: 0,
+		},
+		Memory: models.Quota{
+			Quota: 0,
+			Unit:  "GiB",
+		},
+		Storage: models.Quota{
+			Quota: 0,
+			Unit:  "GiB",
+		},
+		Gpu: []models.GpuQuota{
+			{
+				Name:  "Nvidia-2060",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-3070",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-3080",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-3090",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-4090",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-A100",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-H100",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-A10G",
+				Quota: 0,
+			}, {
+				Name:  "Nvidia-T4",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-2080-Ti",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-3060-Ti",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-3070-Ti",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-3080-Ti",
+				Quota: 0,
+			},
+			{
+				Name:  "Nvidia-4090-Ti",
+				Quota: 0,
+			},
+		},
 	}
 }

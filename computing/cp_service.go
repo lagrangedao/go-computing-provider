@@ -869,7 +869,7 @@ func getLocation() (string, error) {
 		return "", err
 	}
 
-	return strings.TrimSpace(ipInfo.RegionName) + "-" + ipInfo.CountryCode, nil
+	return strings.TrimSpace(ipInfo.Region) + "-" + ipInfo.CountryCode, nil
 }
 
 func getLocalIPAddress() (string, error) {

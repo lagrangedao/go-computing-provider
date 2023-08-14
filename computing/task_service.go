@@ -8,13 +8,81 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
+	"github.com/lagrangedao/go-computing-provider/docker"
 	"github.com/lagrangedao/go-computing-provider/models"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+var runTaskGpuResource sync.Map
+var deployingChan = make(chan models.Job, 10)
+
+type ScheduleTask struct {
+	TaskMap sync.Map
+}
+
+func NewScheduleTask() *ScheduleTask {
+	return &ScheduleTask{}
+}
+
+func (s *ScheduleTask) Run() {
+	for {
+		select {
+		case job := <-deployingChan:
+			s.TaskMap.Store(job.Uuid, job.Status)
+		case <-time.After(15 * time.Second):
+			s.TaskMap.Range(func(key, value any) bool {
+				jobUuid := key.(string)
+				jobStatus := value.(models.JobStatus)
+				reportJobStatus(jobUuid, jobStatus)
+				if jobStatus == models.JobDeployToK8s {
+					s.TaskMap.Delete(jobUuid)
+				}
+				return true
+			})
+		}
+	}
+}
+
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
+	reqParam := map[string]interface{}{
+		"job_uuid": jobUuid,
+		"status":   jobStatus,
+	}
+
+	payload, err := json.Marshal(reqParam)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
+		return
+	}
+
+	client := &http.Client{}
+	url := conf.GetConfig().LAG.ServerUrl + "/job/status"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	if err != nil {
+		logs.GetLogger().Errorf("Error creating request: %v", err)
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
+		return
+	}
+	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+}
 
 func RunSyncTask() {
 	go func() {
@@ -56,19 +124,42 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("Failed report cp resource's summary, error: %+v", err)
 			}
 		}()
-		ticker := time.NewTicker(120 * time.Second)
-		defer ticker.Stop()
 
-		nodeId, _, _ := generateNodeID()
 		location, err := getLocation()
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
+		nodeId, _, _ := generateNodeID()
 
-		reportClusterResource(location, nodeId)
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for range ticker.C {
 			reportClusterResource(location, nodeId)
 		}
+
+	}()
+
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logs.GetLogger().Errorf("Failed report provider bid status, error: %+v", err)
+			}
+		}()
+		nodeId, _, _ := generateNodeID()
+
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			providerStatus, err := checkClusterProviderStatus()
+			if err != nil {
+				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
+				return
+			}
+			logs.GetLogger().Infof("provider status: %s", providerStatus)
+			updateProviderInfo(nodeId, "", "", providerStatus)
+		}
+
 	}()
 
 	watchExpiredTask()
@@ -95,13 +186,13 @@ func reportClusterResource(location, nodeId string) {
 	}
 
 	client := &http.Client{}
-	url := conf.GetConfig().LAD.ServerUrl + "/cp/summary"
+	url := conf.GetConfig().LAG.ServerUrl + "/cp/summary"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
@@ -130,16 +221,13 @@ func watchExpiredTask() {
 		var deleteKey []string
 		for range ticker.C {
 			conn := redisPool.Get()
-			cursor := "0"
+
 			prefix := constants.REDIS_FULL_PREFIX + "*"
-			values, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", prefix))
+			keys, err := redis.Strings(conn.Do("KEYS", prefix))
 			if err != nil {
-				logs.GetLogger().Errorf("Failed scan redis %s prefix, error: %+v", prefix, err)
+				logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
 				return
 			}
-
-			cursor, _ = redis.String(values[0], nil)
-			keys, _ := redis.Strings(values[1], nil)
 			for _, key := range keys {
 				args := []interface{}{key}
 				args = append(args, "k8s_namespace", "space_name", "expire_time")
@@ -159,7 +247,7 @@ func watchExpiredTask() {
 						return
 					}
 					if time.Now().Unix() > expireTime {
-						logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
+						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spacename: %s, the job has expired, and the service starting terminated", key, namespace, spaceName)
 						deleteJob(namespace, spaceName)
 						deleteKey = append(deleteKey, key)
 					}
@@ -170,16 +258,12 @@ func watchExpiredTask() {
 				logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
 				deleteKey = nil
 			}
-
-			if cursor == "0" {
-				break
-			}
 		}
 	}()
 }
 
 func watchNameSpaceForDeleted() {
-	ticker := time.NewTicker(24 * time.Hour)
+	ticker := time.NewTicker(20 * time.Hour)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -207,6 +291,7 @@ func watchNameSpaceForDeleted() {
 					}
 				}
 			}
+			docker.NewDockerService().CleanResource()
 		}
 	}()
 }

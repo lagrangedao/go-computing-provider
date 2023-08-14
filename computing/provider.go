@@ -19,18 +19,26 @@ import (
 )
 
 func Reconnect(nodeID string) string {
-	updateProviderInfo(nodeID, "", "")
+	updateProviderInfo(nodeID, "", "", models.ActiveStatus)
 	return nodeID
 }
 
-func updateProviderInfo(nodeID string, peerID string, address string) {
-	updateURL := conf.GetConfig().LAD.ServerUrl + "/cp"
-	cpName, _ := os.Hostname()
+func updateProviderInfo(nodeID, peerID, address string, status string) {
+	updateURL := conf.GetConfig().LAG.ServerUrl + "/cp"
+
+	var cpName string
+	if conf.GetConfig().API.NodeName != "" {
+		cpName = conf.GetConfig().API.NodeName
+	} else {
+		cpName, _ = os.Hostname()
+	}
+
 	provider := models.ComputingProvider{
 		Name:         cpName,
 		NodeId:       nodeID,
 		MultiAddress: conf.GetConfig().API.MultiAddress,
 		Autobid:      1,
+		Status:       status,
 	}
 
 	jsonData, err := json.Marshal(provider)
@@ -48,13 +56,13 @@ func updateProviderInfo(nodeID string, peerID string, address string) {
 
 	// Set the content type and API token in the request header
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Error updating provider info: %v", err)
 	} else {
-		logs.GetLogger().Infof("Provider info sent. Status code: %d\n", resp.StatusCode)
+		logs.GetLogger().Infof("Provider info sent. Status code: %d", resp.StatusCode)
 		if resp.StatusCode == 400 {
 			logs.GetLogger().Info(resp.Body)
 		}
@@ -73,7 +81,7 @@ func InitComputingProvider() string {
 	logs.GetLogger().Infof("Node ID :%s Peer ID:%s address:%s",
 		nodeID,
 		peerID, address)
-	updateProviderInfo(nodeID, peerID, address)
+	updateProviderInfo(nodeID, peerID, address, models.ActiveStatus)
 	return nodeID
 }
 func generateNodeID() (string, string, string) {

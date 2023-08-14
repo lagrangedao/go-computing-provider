@@ -15,7 +15,7 @@ import (
 
 func sendHeartbeat(nodeId string) {
 	// Replace the following URL with your Flask application's heartbeat endpoint URL
-	heartbeatURL := conf.GetConfig().LAD.ServerUrl + "/cp/heartbeat"
+	heartbeatURL := conf.GetConfig().LAG.ServerUrl + "/cp/heartbeat"
 	payload := strings.NewReader(fmt.Sprintf(`{
     "node_id": "%s",
     "status": "Active"
@@ -28,15 +28,15 @@ func sendHeartbeat(nodeId string) {
 		return
 	}
 	// Set the API token in the request header (replace "your_api_token" with the actual token)
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAD.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the LAD server: %v", err)
 		computing.Reconnect(nodeId)
 	} else {
-		body, err := ioutil.ReadAll(resp.Body)
-		logs.GetLogger().Infof("Heartbeat sent. Status code: %d\n %s", resp.StatusCode, string(body))
+		_, err := ioutil.ReadAll(resp.Body)
+		logs.GetLogger().Infof("Heartbeat sent. Status code: %d", resp.StatusCode)
 		if resp.StatusCode != http.StatusOK {
 			logs.GetLogger().Warningln("Retrying to connect to the LAD server")
 			computing.Reconnect(nodeId)
@@ -49,7 +49,7 @@ func sendHeartbeat(nodeId string) {
 }
 
 func sendHeartbeats(nodeId string) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	for range ticker.C {
 		sendHeartbeat(nodeId)
 	}
@@ -61,6 +61,8 @@ func ProjectInit() {
 	nodeID := computing.InitComputingProvider()
 	// Start sending heartbeats
 	go sendHeartbeats(nodeID)
+
+	go computing.NewScheduleTask().Run()
 
 	computing.RunSyncTask()
 	celeryService := computing.NewCeleryService()

@@ -1,13 +1,12 @@
 package computing
 
 import (
-	// ... other imports ...
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/docker"
+	"github.com/lagrangedao/go-computing-provider/models"
 	"io"
 	"io/fs"
 	"log"
@@ -39,39 +38,9 @@ func getSpaceName(apiURL string) (string, string, error) {
 	return creator, spaceName, nil
 }
 
-func BuildSpaceTaskImage(spaceName, jobSourceURI string) (bool, string, string, error) {
-	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
-
-	spaceAPIURL := fmt.Sprintf(jobSourceURI)
-	resp, err := http.Get(spaceAPIURL)
-	if err != nil {
-		return false, "", "", fmt.Errorf("error making request to Space API: %w", err)
-	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
-	}(resp.Body)
-	logs.GetLogger().Infof("Space API response received. Response: %d", resp.StatusCode)
-	if resp.StatusCode != http.StatusOK {
-		return false, "", "", fmt.Errorf("space API response not OK. Status Code: %d", resp.StatusCode)
-	}
-
-	var spaceJSON struct {
-		Data struct {
-			Files []struct {
-				Name string `json:"name"`
-				URL  string `json:"url"`
-			} `json:"files"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&spaceJSON); err != nil {
-		return false, "", "", fmt.Errorf("error decoding Space API response JSON: %v", err)
-	}
-
+func BuildSpaceTaskImage(spaceName string, files []models.SpaceFile) (bool, string, string, error) {
+	var err error
 	buildFolder := "build/"
-	files := spaceJSON.Data.Files
 	if len(files) > 0 {
 		downloadSpacePath := filepath.Join(filepath.Dir(files[0].Name), filepath.Base(files[0].Name))
 		for _, file := range files {
@@ -106,11 +75,12 @@ func BuildSpaceTaskImage(spaceName, jobSourceURI string) (bool, string, string, 
 	return false, "", "", NotFoundError
 }
 
-func BuildImagesByDockerfile(spaceName, imagePath string) (string, string) {
+func BuildImagesByDockerfile(jobUuid, spaceName, imagePath string) (string, string) {
+	updateJobStatus(jobUuid, models.JobBuildImage)
 	imageName := fmt.Sprintf("lagrange/%s:%d", spaceName, time.Now().Unix())
-	if conf.GetConfig().Registry.UserName != "" {
+	if conf.GetConfig().Registry.ServerAddress != "" {
 		imageName = fmt.Sprintf("%s/%s:%d",
-			strings.TrimSpace(conf.GetConfig().Registry.UserName), spaceName, time.Now().Unix())
+			strings.TrimSpace(conf.GetConfig().Registry.ServerAddress), spaceName, time.Now().Unix())
 	}
 	imageName = strings.ToLower(imageName)
 	dockerfilePath := filepath.Join(imagePath, "Dockerfile")
@@ -122,7 +92,8 @@ func BuildImagesByDockerfile(spaceName, imagePath string) (string, string) {
 		return "", ""
 	}
 
-	if conf.GetConfig().Registry.UserName != "" {
+	if conf.GetConfig().Registry.ServerAddress != "" {
+		updateJobStatus(jobUuid, models.JobPushImage)
 		if err := dockerService.PushImage(imageName); err != nil {
 			logs.GetLogger().Errorf("Error Docker push image: %v", err)
 			return "", ""

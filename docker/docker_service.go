@@ -218,7 +218,7 @@ type ErrorLine struct {
 }
 
 func (ds *DockerService) PushImage(imagesName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*600)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*6000)
 	defer cancel()
 
 	var authConfig = types.AuthConfig{
@@ -228,16 +228,23 @@ func (ds *DockerService) PushImage(imagesName string) error {
 	}
 	authConfigBytes, _ := json.Marshal(authConfig)
 	authConfigEncoded := base64.URLEncoding.EncodeToString(authConfigBytes)
-
 	opts := types.ImagePushOptions{RegistryAuth: authConfigEncoded}
-	rd, err := ds.c.ImagePush(ctx, imagesName, opts)
-	if err != nil {
-		return err
-	}
-	defer rd.Close()
 
-	if err = printOut(rd); err != nil {
-		return err
+	// retry
+	retries := 5
+	var err error
+	for i := 0; i < retries; i++ {
+		rd, rerr := ds.c.ImagePush(ctx, imagesName, opts)
+		if rerr == nil {
+			err = printOut(rd)
+			rd.Close()
+			if err == nil {
+				return nil
+			}
+		} else {
+			err = rerr
+		}
+		time.Sleep(2 * time.Second)
 	}
 	return nil
 }
@@ -299,10 +306,25 @@ func (ds *DockerService) CleanResource() {
 	danglingFilters.Add("dangling", "true")
 	_, err := ds.c.ImagesPrune(ctx, danglingFilters)
 	if err != nil {
-		logs.GetLogger().Errorf("Failed delete unused image, error: %+v", err)
+		logs.GetLogger().Errorf("Failed delete dangling image, error: %+v", err)
+		return
 	}
 
 	if _, err = ds.c.ContainersPrune(ctx, filters.NewArgs()); err != nil {
 		logs.GetLogger().Errorf("Failed delete unused container, error: %+v", err)
+		return
+	}
+
+	images, err := ds.c.ImageList(context.Background(), types.ImageListOptions{})
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get image list, error: %+v", err)
+		return
+	}
+
+	for _, image := range images {
+		if image.Containers == 0 {
+			logs.GetLogger().Infof("start clean unused image, imageId: %s", image.ID)
+			ds.RemoveImage(image.ID)
+		}
 	}
 }

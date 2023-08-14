@@ -1,0 +1,70 @@
+{
+  "cpu": {
+    "quota": 0
+  },
+  "gpu":[
+    {
+      "name": "Nvidia-2060",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-3070",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-3080",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-3090",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-4090",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-A100",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-H100",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-A10G",
+      "quota": 0
+    }, {
+      "name": "Nvidia-T4",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-2080-Ti",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-3060-Ti",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-3070-Ti",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-3080-Ti",
+      "quota": 0
+    },
+    {
+      "name": "Nvidia-4090-Ti",
+      "quota": 0
+    }
+  ],
+  "memory": {
+    "quota": 0,
+    "unit": "GiB"
+  },
+  "storage": {
+    "quota": 0,
+    "unit": "GiB"
+  }
+}

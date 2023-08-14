@@ -19,15 +19,6 @@ func TestNewK8sService(t *testing.T) {
 	service.GetPods("kube-system", "")
 }
 
-func TestGetNodeList(t *testing.T) {
-	service := computing.NewK8sService()
-	ip, err := service.GetNodeList()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	fmt.Println(ip)
-}
-
 func TestTar(t *testing.T) {
 	buildPath := "build/0xe259F84193604f9c8228940Ab5cB5c62Dfb514d6/spaces/demo001"
 	spaceName := "DEMO-123"
@@ -81,14 +72,7 @@ func TestTar(t *testing.T) {
 
 func TestDockerBuild(t *testing.T) {
 	dockerService := docker.NewDockerService()
-	//buildPath := "build/0xe259F84193604f9c8228940Ab5cB5c62Dfb514d6/spaces/demo001"
-	//spaceName := "DEMO-123"
-	imageName := "sonic868/demo:v2.0"
-	//dockerService.BuildImage(buildPath, spaceName, imageName)
-	err := dockerService.PushImage(imageName)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	dockerService.CleanResource()
 }
 
 func TestNewStorageService(t *testing.T) {

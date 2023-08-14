@@ -50,6 +50,7 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 	logs.GetLogger().Infof("Job received: %s", jobData.JobSourceURI)
+	logs.GetLogger().Infof("Job Data: %+v", jobData)
 
 	jobSourceURI := jobData.JobSourceURI
 	creator, spaceName, err := getSpaceName(jobSourceURI)
@@ -59,7 +60,7 @@ func ReceiveJob(c *gin.Context) {
 	}
 
 	hostName := generateString(10) + conf.GetConfig().API.Domain
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostName, jobData.Duration, jobData.UUID)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -75,7 +76,7 @@ func ReceiveJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
-
+	updateJobStatus(jobData.UUID, models.JobUploadResult)
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -126,23 +127,48 @@ func RedeployJob(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logs.GetLogger().Infof("Job received: %+v", jobData)
+	logs.GetLogger().Infof("redeploy Job received: %+v", jobData)
 
 	jobSourceURI := jobData.JobSourceURI
 	creator, spaceName, err := getSpaceName(jobSourceURI)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get space name: %v", err)
-		return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 	}
 
 	var hostName string
 	if jobData.JobResultURI != "" {
-		hostName = strings.ReplaceAll(jobData.JobResultURI, "https://", "")
+		resp, err := http.Get(jobData.JobResultURI)
+		if err != nil {
+			logs.GetLogger().Errorf("error making request to Space API: %+v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				logs.GetLogger().Errorf("error closed resp Space API: %+v", err)
+			}
+		}(resp.Body)
+		logs.GetLogger().Infof("Space API response received. Response: %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusOK {
+			logs.GetLogger().Errorf("space API response not OK. Status Code: %d", resp.StatusCode)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		}
+
+		var hostInfo struct {
+			JobResultUri string `json:"job_result_uri"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&hostInfo); err != nil {
+			logs.GetLogger().Errorf("error decoding Space API response JSON: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		hostName = strings.ReplaceAll(hostInfo.JobResultUri, "https://", "")
 	} else {
 		hostName = generateString(10) + conf.GetConfig().API.Domain
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, jobData.Hardware, hostName, jobData.Duration)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -160,8 +186,6 @@ func RedeployJob(c *gin.Context) {
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	submitJob(&jobData)
-	logs.GetLogger().Infof("update Job received: %+v", jobData)
-
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -184,7 +208,10 @@ func ReNewJob(c *gin.Context) {
 	valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", redisKey, err)
-		return
+		c.JSON(http.StatusOK, map[string]string{
+			"status":  "failed",
+			"message": "The job was terminated due to its expiration date",
+		})
 	}
 
 	var (
@@ -226,24 +253,22 @@ func ReNewJob(c *gin.Context) {
 	c.JSON(http.StatusOK, map[string]string{
 		"status": "success",
 	})
+	c.JSON(http.StatusOK, common.CreateSuccessResponse("success"))
 }
 
 func DeleteJob(c *gin.Context) {
-	var deleteJobReq models.DeleteJobReq
-	if err := c.ShouldBindJSON(&deleteJobReq); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	logs.GetLogger().Infof("Job delete req: %+v", deleteJobReq)
-	if deleteJobReq.CreatorWallet == "" {
+	creatorWallet := c.Query("creator_wallet")
+	spaceName := c.Query("space_name")
+
+	if creatorWallet == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
 	}
-	if deleteJobReq.SpaceName == "" {
+	if spaceName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "space_name is required"})
 	}
 
-	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(deleteJobReq.CreatorWallet)
-	deleteJob(k8sNameSpace, deleteJobReq.SpaceName)
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
+	deleteJob(k8sNameSpace, spaceName)
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 
@@ -268,9 +293,62 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostName string, duration int, jobUuid string) string {
-	logs.GetLogger().Infof("Processing job: %s", jobSourceURI)
-	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, jobSourceURI)
+func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
+	var gpuName string
+	defer func() {
+		if gpuName != "" {
+			count, ok := runTaskGpuResource.Load(gpuName)
+			if ok && count.(int) > 0 {
+				runTaskGpuResource.Store(gpuName, count.(int)-1)
+			} else {
+				runTaskGpuResource.Delete(gpuName)
+			}
+		}
+	}()
+	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
+
+	resp, err := http.Get(jobSourceURI)
+	if err != nil {
+		logs.GetLogger().Errorf("error making request to Space API: %+v", err)
+		return ""
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			logs.GetLogger().Errorf("error closed resp Space API: %+v", err)
+		}
+	}(resp.Body)
+	logs.GetLogger().Infof("Space API response received. Response: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		logs.GetLogger().Errorf("space API response not OK. Status Code: %d", resp.StatusCode)
+		return ""
+	}
+
+	var spaceJson models.SpaceJSON
+	if err := json.NewDecoder(resp.Body).Decode(&spaceJson); err != nil {
+		logs.GetLogger().Errorf("error decoding Space API response JSON: %v", err)
+		return ""
+	}
+
+	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
+	logs.GetLogger().Infof("spaceName: %s, hardwareName: %s", spaceName, spaceHardware.Description)
+	if len(spaceHardware.Description) == 0 {
+		return ""
+	}
+	hardwareInfo := getHardwareDetail(spaceHardware.Description)
+
+	if hardwareInfo.Gpu.Unit != "" {
+		gpuName = strings.ReplaceAll(hardwareInfo.Gpu.Unit, " ", "-")
+		count, ok := runTaskGpuResource.Load(gpuName)
+		if ok {
+			runTaskGpuResource.Store(gpuName, count.(int)+1)
+		} else {
+			runTaskGpuResource.Store(gpuName, 1)
+		}
+	}
+
+	updateJobStatus(jobUuid, models.JobDownloadSource)
+	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return ""
@@ -279,30 +357,15 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hardware, hostName string
 	creator = strings.ToLower(creator)
 	spaceName = strings.ToLower(spaceName)
 	if containsYaml {
-		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, duration)
+		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, hardwareInfo, duration)
 	} else {
-		imageName, dockerfilePath := BuildImagesByDockerfile(spaceName, imagePath)
-		r, ok := common.HardwareResource[hardware]
-		if !ok {
-			logs.GetLogger().Warnf("not found resource.")
-			return ""
-		}
-		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, r, duration)
+		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceName, imagePath)
+		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, hardwareInfo, duration)
 	}
 	return hostName
 }
 
-type DeploymentReq struct {
-	NameSpace     string
-	DeployName    string
-	ContainerName string
-	ImageName     string
-	Label         map[string]string
-	ContainerPort int32
-	Res           common.Resource
-}
-
-func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, res common.Resource, duration int) {
+func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, hardwareResource models.Resource, duration int) {
 	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
@@ -320,6 +383,18 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 
 	if err := deployNamespace(creatorWallet); err != nil {
 		logs.GetLogger().Error(err)
+		return
+	}
+
+	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Errorf("get memory failed, error: %+v", err)
+		return
+	}
+
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Storage.Quantity, hardwareResource.Storage.Unit))
+	if err != nil {
+		logs.GetLogger().Errorf("get storage failed, error: %+v", err)
 		return
 	}
 
@@ -346,7 +421,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 				},
 
 				Spec: coreV1.PodSpec{
-					//NodeSelector: generateLabel(""),
+					NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
 					Containers: []coreV1.Container{{
 						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
 						Image:           imageName,
@@ -354,14 +429,36 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: int32(containerPort),
 						}},
+						Env: []coreV1.EnvVar{
+							{
+								Name:  "wallet_address",
+								Value: creatorWallet,
+							},
+							{
+								Name:  "space_name",
+								Value: spaceName,
+							},
+							{
+								Name:  "result_url",
+								Value: hostName,
+							},
+							{
+								Name:  "job_uuid",
+								Value: jobUuid,
+							},
+						},
 						Resources: coreV1.ResourceRequirements{
 							Limits: coreV1.ResourceList{
-								//coreV1.ResourceCPU:                    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory:                 resource.MustParse(deploy.Res.Memory.Description),
+								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:           memQuantity,
+								coreV1.ResourceEphemeralStorage: storageQuantity,
+								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 							Requests: coreV1.ResourceList{
-								//coreV1.ResourceCPU:    *resource.NewQuantity(deploy.Res.Cpu.Quantity, resource.DecimalSI),
-								//coreV1.ResourceMemory: resource.MustParse(deploy.Res.Memory.Description),
+								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:           memQuantity,
+								coreV1.ResourceEphemeralStorage: storageQuantity,
+								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
 							},
 						},
 					}},
@@ -373,18 +470,21 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 		logs.GetLogger().Error(err)
 		return
 	}
+
+	updateJobStatus(jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
 	if err := deployK8sResource(k8sNameSpace, spaceName, hostName, containerPort); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
+	updateJobStatus(jobUuid, models.JobDeployToK8s)
 
 	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	return
 }
 
-func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, duration int) {
+func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, hardwareResource models.Resource, duration int) {
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
 	deleteJob(k8sNameSpace, spaceName)
 
@@ -399,20 +499,32 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 		return
 	}
 
+	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get memory failed, error: %+v", err)
+		return
+	}
+
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Storage.Quantity, hardwareResource.Storage.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get storage failed, error: %+v", err)
+		return
+	}
+
 	k8sService := NewK8sService()
-	for _, resource := range containerResources {
-		for i, envVar := range resource.Env {
+	for _, cr := range containerResources {
+		for i, envVar := range cr.Env {
 			if strings.Contains(envVar.Name, "NEXTAUTH_URL") {
-				resource.Env[i].Value = "https://" + hostName
+				cr.Env[i].Value = "https://" + hostName
 				break
 			}
 		}
 
 		var volumeMount []coreV1.VolumeMount
 		var volumes []coreV1.Volume
-		if resource.VolumeMounts.Path != "" {
-			fileNameWithoutExt := filepath.Base(resource.VolumeMounts.Name[:len(resource.VolumeMounts.Name)-len(filepath.Ext(resource.VolumeMounts.Name))])
-			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceName, filepath.Dir(yamlPath), resource.VolumeMounts.Name)
+		if cr.VolumeMounts.Path != "" {
+			fileNameWithoutExt := filepath.Base(cr.VolumeMounts.Name[:len(cr.VolumeMounts.Name)-len(filepath.Ext(cr.VolumeMounts.Name))])
+			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceName, filepath.Dir(yamlPath), cr.VolumeMounts.Name)
 			if err != nil {
 				logs.GetLogger().Error(err)
 				return
@@ -433,13 +545,13 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 			volumeMount = []coreV1.VolumeMount{
 				{
 					Name:      spaceName + "-" + fileNameWithoutExt,
-					MountPath: resource.VolumeMounts.Path,
+					MountPath: cr.VolumeMounts.Path,
 				},
 			}
 		}
 
 		var containers []coreV1.Container
-		for _, depend := range resource.Depends {
+		for _, depend := range cr.Depends {
 			var handler = new(coreV1.ExecAction)
 			handler.Command = depend.ReadyCmd
 			containers = append(containers, coreV1.Container{
@@ -450,10 +562,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 				Env:             depend.Env,
 				Ports:           depend.Ports,
 				ImagePullPolicy: coreV1.PullIfNotPresent,
-				Resources: coreV1.ResourceRequirements{
-					Limits:   resource.ResourceLimit,
-					Requests: resource.ResourceLimit,
-				},
+				Resources:       coreV1.ResourceRequirements{},
 				ReadinessProbe: &coreV1.Probe{
 					ProbeHandler: coreV1.ProbeHandler{
 						Exec: handler,
@@ -464,17 +573,46 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 			})
 		}
 
+		cr.Env = append(cr.Env, []coreV1.EnvVar{
+			{
+				Name:  "wallet_address",
+				Value: creatorWallet,
+			},
+			{
+				Name:  "space_name",
+				Value: spaceName,
+			},
+			{
+				Name:  "result_url",
+				Value: hostName,
+			},
+			{
+				Name:  "job_uuid",
+				Value: jobUuid,
+			},
+		}...)
+
 		containers = append(containers, coreV1.Container{
-			Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + resource.Name,
-			Image:           resource.ImageName,
-			Command:         resource.Command,
-			Args:            resource.Args,
-			Env:             resource.Env,
-			Ports:           resource.Ports,
+			Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + cr.Name,
+			Image:           cr.ImageName,
+			Command:         cr.Command,
+			Args:            cr.Args,
+			Env:             cr.Env,
+			Ports:           cr.Ports,
 			ImagePullPolicy: coreV1.PullIfNotPresent,
 			Resources: coreV1.ResourceRequirements{
-				Limits:   resource.ResourceLimit,
-				Requests: resource.ResourceLimit,
+				Limits: coreV1.ResourceList{
+					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+					coreV1.ResourceMemory:           memQuantity,
+					coreV1.ResourceEphemeralStorage: storageQuantity,
+					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+				},
+				Requests: coreV1.ResourceList{
+					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+					coreV1.ResourceMemory:           memQuantity,
+					coreV1.ResourceEphemeralStorage: storageQuantity,
+					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+				},
 			},
 			VolumeMounts: volumeMount,
 		})
@@ -499,8 +637,9 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 						Namespace: k8sNameSpace,
 					},
 					Spec: coreV1.PodSpec{
-						Containers: containers,
-						Volumes:    volumes,
+						NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
+						Containers:   containers,
+						Volumes:      volumes,
 					},
 				},
 			}}
@@ -510,14 +649,16 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, dur
 			logs.GetLogger().Error(err)
 			return
 		}
+
+		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(resource.Ports[0].ContainerPort)); err != nil {
+		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
+		updateJobStatus(jobUuid, models.JobDeployToK8s)
 
-		// watch running time and release resources when expired
 		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
 	}
 }
@@ -598,11 +739,7 @@ func deleteJob(namespace, spaceName string) {
 		return
 	}
 	for _, imageId := range deployImageIds {
-		err = dockerService.RemoveImage(imageId)
-		if err != nil {
-			logs.GetLogger().Errorf("Failed delete unused image, imageId: %s, error: %+v", imageId, err)
-			continue
-		}
+		dockerService.RemoveImage(imageId)
 	}
 
 	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil && !errors.IsNotFound(err) {
@@ -613,7 +750,7 @@ func deleteJob(namespace, spaceName string) {
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
 	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete eplicationController, spaceName: %s, error: %+v", spaceName, err)
+		logs.GetLogger().Errorf("Failed delete ReplicaSetsController, spaceName: %s, error: %+v", spaceName, err)
 		return
 	}
 
@@ -682,6 +819,15 @@ func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) 
 	}()
 }
 
+func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {
+	go func() {
+		deployingChan <- models.Job{
+			Uuid:   jobUuid,
+			Status: jobStatus,
+		}
+	}()
+}
+
 func generateString(length int) string {
 	characters := "abcdefghijklmnopqrstuvwxyz"
 	numbers := "0123456789"
@@ -692,11 +838,6 @@ func generateString(length int) string {
 		result[i] = source[rand.Intn(len(source))]
 	}
 	return string(result)
-}
-
-func resourceQuantity(quantity string) *resource.Quantity {
-	q, _ := resource.ParseQuantity(quantity)
-	return &q
 }
 
 func getLocation() (string, error) {
@@ -722,12 +863,13 @@ func getLocation() (string, error) {
 		CountryCode string `json:"countryCode"`
 		City        string `json:"city"`
 		Region      string `json:"region"`
+		RegionName  string `json:"regionName"`
 	}
 	if err = json.Unmarshal(body, &ipInfo); err != nil {
 		return "", err
 	}
 
-	return ipInfo.CountryCode + "-" + ipInfo.Region, nil
+	return strings.TrimSpace(ipInfo.Region) + "-" + ipInfo.CountryCode, nil
 }
 
 func getLocalIPAddress() (string, error) {
@@ -749,4 +891,31 @@ func getLocalIPAddress() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(ipBytes)), nil
+}
+
+func getHardwareDetail(description string) models.Resource {
+	var hardwareResource models.Resource
+	confSplits := strings.Split(description, "·")
+	if strings.Contains(confSplits[0], "CPU") {
+		hardwareResource.Gpu.Quantity = 0
+		hardwareResource.Gpu.Unit = ""
+	} else {
+		hardwareResource.Gpu.Quantity = 1
+		oldName := strings.TrimSpace(confSplits[0])
+		hardwareResource.Gpu.Unit = strings.ReplaceAll(oldName, "Nvidia", "NVIDIA")
+	}
+
+	cpuSplits := strings.Split(confSplits[1], " ")
+	cores, _ := strconv.ParseInt(cpuSplits[1], 10, 64)
+	hardwareResource.Cpu.Quantity = cores
+	hardwareResource.Cpu.Unit = cpuSplits[2]
+
+	memSplits := strings.Split(confSplits[2], " ")
+	mem, _ := strconv.ParseInt(memSplits[1], 10, 64)
+	hardwareResource.Memory.Quantity = mem
+	hardwareResource.Memory.Unit = strings.ReplaceAll(memSplits[2], "B", "")
+
+	hardwareResource.Storage.Quantity = 60
+	hardwareResource.Storage.Unit = "Gi"
+	return hardwareResource
 }

@@ -308,11 +308,9 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 	}
 
 	for _, node := range nodes.Items {
-		nodeResource, err := getNodeResource(activePods, &node)
-		if err != nil {
-			logs.GetLogger().Error(err)
-		}
+		nodeGpu, _, nodeResource := getNodeResource(activePods, &node)
 
+		collectGpu := make(map[string]collectGpuInfo)
 		if gpu, ok := nodeGpuInfoMap[node.Name]; ok {
 			var gpuInfo struct {
 				Gpu models.Gpu `json:"gpu"`
@@ -322,7 +320,55 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 				logs.GetLogger().Error(err)
 				return nil, err
 			}
-			nodeResource.Gpu = gpuInfo.Gpu
+
+			for index, gpuDetail := range gpuInfo.Gpu.Details {
+				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
+				if v, ok := collectGpu[gpuName]; ok {
+					v.count += 1
+					collectGpu[gpuName] = v
+				} else {
+					collectGpu[gpuName] = collectGpuInfo{
+						index,
+						1,
+						0,
+					}
+				}
+			}
+
+			for name, info := range collectGpu {
+				runCount := int(nodeGpu[name])
+				if num, ok := runTaskGpuResource.Load(name); ok {
+					runCount += num.(int)
+				}
+
+				if runCount < info.count {
+					info.remainNum = info.count - runCount
+				} else {
+					info.remainNum = 0
+				}
+				collectGpu[name] = info
+			}
+
+			var counter = make(map[string]int)
+			newGpu := make([]models.GpuDetail, 0)
+			for _, gpuDetail := range gpuInfo.Gpu.Details {
+				gpuName := strings.ReplaceAll(gpuDetail.ProductName, " ", "-")
+				newDetail := gpuDetail
+				g := collectGpu[gpuName]
+				if g.remainNum > 0 && counter[gpuName] < g.remainNum {
+					newDetail.Status = models.Available
+					counter[gpuName] += 1
+				} else {
+					newDetail.Status = models.Occupied
+				}
+				newGpu = append(newGpu, newDetail)
+			}
+			nodeResource.Gpu = models.Gpu{
+				DriverVersion: gpuInfo.Gpu.DriverVersion,
+				CudaVersion:   gpuInfo.Gpu.CudaVersion,
+				AttachedGpus:  gpuInfo.Gpu.AttachedGpus,
+				Details:       newGpu,
+			}
 		}
 		nodeList = append(nodeList, nodeResource)
 	}
@@ -337,8 +383,8 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 		Timestamps: false,
 	}
 
-	podList, err := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).List(ctx, metaV1.ListOptions{
-		LabelSelector: "app=hardware-collect",
+	podList, err := s.k8sClient.CoreV1().Pods("kube-system").List(ctx, metaV1.ListOptions{
+		LabelSelector: "app=resource-exporter",
 	})
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -347,7 +393,7 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 
 	result := make(map[string]*strings.Builder)
 	for _, pod := range podList.Items {
-		req := s.k8sClient.CoreV1().Pods(coreV1.NamespaceDefault).GetLogs(pod.Name, &podLogOptions)
+		req := s.k8sClient.CoreV1().Pods("kube-system").GetLogs(pod.Name, &podLogOptions)
 		buf, err := readLog(req)
 		if err != nil {
 			return nil, err
@@ -390,11 +436,14 @@ func readLog(req *rest.Request) (*strings.Builder, error) {
 }
 
 func generateLabel(name string) map[string]string {
-	var labels = make(map[string]string)
-	if strings.Contains(name, "NVIDIA") {
-		labels["nvidia.com/gpu.product"] = name
+	if name != "" {
+		key := strings.ReplaceAll(name, " ", "-")
+		return map[string]string{
+			key: "true",
+		}
+	} else {
+		return map[string]string{}
 	}
-	return labels
 }
 
 func IsKubernetesVersionGreaterThan(version string, targetVersion string) bool {
@@ -449,4 +498,10 @@ func parseKubernetesVersion(version string) (*kubernetesVersion, error) {
 	}
 
 	return v, nil
+}
+
+type collectGpuInfo struct {
+	index     int
+	count     int
+	remainNum int
 }

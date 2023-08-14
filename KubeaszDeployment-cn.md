@@ -23,10 +23,28 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
   ```docker exec -it kubeasz ezctl setup default all```
 - 安装成功后验证集群信息
   - ```source ~/.bashrc```
+
+  ![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/e1f42783-b657-4fab-a2a3-40eefc17e7d4)
+
+
   - 验证集群版本 ```kubectl version```
+  
+  ![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/77a5f9c5-584f-4069-8f7d-c5d9a3e2347f)
+
   - 验证节点就绪 (Ready) 状态 ```kubectl get node```
+
+  ![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/ebe77db8-2ecc-4caa-b945-35ed7375ae13)
+
+
   - 验证集群pod状态，默认已安装网络插件、coredns、metrics-server等 ```kubectl get pod -A```
+
+ ![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/310425fd-1a6c-448d-8387-a8c210a7839b)
+
   - 验证集群服务状态 ```kubectl get svc -A```
+ 
+  ![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/aa557c41-5efe-401f-8987-b129bbf51d4a)
+
+
 - 清除集群
   - 销毁集群 ```docker exec -it kubeasz ezctl destroy default```
   - 重启节点清理残留虚拟网卡、路由等信息
@@ -54,6 +72,13 @@ source  $HOME/.bashrc
 ```bash
 wget https://developer.download.nvidia.com/compute/cuda/12.2.1/local_installers/cuda_12.2.1_535.86.10_linux.runsudo sh cuda_12.2.1_535.86.10_linux.run
 ```
+
+### 检查安装结果
+
+```nvidia-smi```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/07ca8311-6e6b-455e-af6f-7410fca158ec)
+
 
 ## 安装NVIDIA Plugin
 
@@ -103,7 +128,14 @@ version = 2
 sudo systemctl restart containerd
 ```
 
-### 在kubernetes中开启GPU支持
+### 检查服务运行状态
+
+```sudo systemctl status containerd```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/f82f5dc8-cc11-4f56-963c-bc9294ecc610)
+
+
+### 在k8s中开启GPU支持
 
 在集群中GPU节点配置了以上选项后，可以部署以下daemonset开启gpu支持：
 
@@ -111,9 +143,31 @@ sudo systemctl restart containerd
 $ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.1/nvidia-device-plugin.yml
 ```
 
+### 检查k8s中NVIDIA GPU pod状态
+
+```kubectl get pods -A```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/32da45d1-e910-403d-85c2-76c9fd8acc03)
+
+### 进入NVIDIA GPU pod检查GPU状态，完成后返回宿主机
+
+```kubectl exec -it nvidia-device-plugin-daemonset-bz7rt -n kube-system -- bash```
+```nvidia-smi```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/064f3a49-30bb-4c56-bde1-f161ed0f2da8)
+
+
+
 ## 安装ingress-nginx controller
 
 ```kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.1/deploy/static/provider/cloud/deploy.yaml```
+
+### 检查安装后的ingress-nginx-controller pod
+
+```kubectl get pods -A```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/08bf4167-2a77-4bef-9e87-c5206e833b87)
+
 
 ## 安装宿主机上的nginx服务
 
@@ -125,6 +179,7 @@ sudo apt install nginx
 ### 从[letsencrypt](https://letsencrypt.osfipin.com/user-0408/order/apply)获取免费https证书
 
 **注意：**```本证书有效期为3个月，3个月到期后需要续签，如果不想手动续签可以部署cert-manager服务自动续签，cert-manager服务部署流程不包含在本文档范畴```
+
 - 申请证书时输入域名后需要将泛域名及包含根域选中 ```填写的域名需要在域名服务商提前购买```
 - 输入域名后依次点击下一步，选择RSA加密算法与Let's Encrypt渠道后点击提交申请
 - 申请后选择DNS验证方式进行验证 ```需前往域名服务商配置域名解析```
@@ -172,6 +227,17 @@ server {
 
 ```
 
+### 检查本地nginx服务已经端口监听
+
+```sudo systemctl status nginx```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/cccf3103-bc3e-4620-8eaf-909b08ee0faf)
+
+```sudo netstat -ltnpa | grep nginx```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/d649e0a5-72ea-4e3e-935a-078d3b07b2fa)
+
+
 ### 公网访问设置
 
 将宿主机上的nginx 80和443端口映射到公网IP的80和443端口，并在域名服务商处设置dns解析到公网IP。可以通过telnet检查端口连通性：
@@ -180,6 +246,9 @@ server {
 telnet infcomputing.net 80
 telnet infcomputing.net 443
 ```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/43ec36d6-5c09-46dd-8783-fb86fd62b5d5)
+
 
 ## 安装resource-exporter
 
@@ -210,6 +279,13 @@ spec:
 ```
 
 执行 ```kubectl apply -f resource-exporter.yaml```
+
+### 检查resource-exporter pod
+
+```kubectl get pod -A```
+
+![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/07dc2dc6-6873-4c92-83a3-43193417fa48)
+
 
 ## 安装redis-server
 

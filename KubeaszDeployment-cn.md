@@ -9,7 +9,9 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 本流程使用 [kubeasz 3.5.0](https://github.com/easzlab/kubeasz.git) 作为k8s部署工具链，kubeasz依赖于ansible部署基础k8s集群.
 
 - 下载 [ezdown](https://github.com/easzlab/kubeasz/releases/download/3.5.0/ezdown)
-```wget https://github.com/easzlab/kubeasz/releases/download/3.5.0/ezdown```
+```
+wget https://github.com/easzlab/kubeasz/releases/download/3.5.0/ezdown
+```
 - 下载kubeasz代码、二进制以及容器镜像
   - 国内执行 ```./ezdown -D```
   - 海外执行 ```./ezdown -D -m standard```

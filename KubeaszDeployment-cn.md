@@ -227,7 +227,7 @@ server {
 
 ```
 
-### 检查本地nginx服务已经端口监听
+### 检查本地nginx服务以及端口监听
 
 ```sudo systemctl status nginx```
 

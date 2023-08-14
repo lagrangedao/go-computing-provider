@@ -151,8 +151,10 @@ $ kubectl create -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v
 
 ### 进入NVIDIA GPU pod检查GPU状态，完成后返回宿主机
 
-```kubectl exec -it nvidia-device-plugin-daemonset-bz7rt -n kube-system -- bash```
-```nvidia-smi```
+```
+kubectl exec -it nvidia-device-plugin-daemonset-bz7rt -n kube-system -- bash
+nvidia-smi
+```
 
 ![image](https://github.com/kikakkz/go-computing-provider/assets/13128505/064f3a49-30bb-4c56-bde1-f161ed0f2da8)
 

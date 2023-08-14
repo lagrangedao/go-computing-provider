@@ -124,7 +124,7 @@ sudo apt install nginx
 
 ### 从letsencrypt获取免费https证书
 
-**注意：本证书有效期为3个月，3个月到期后需要续签，如果不想手动续签可以部署cert-manager服务自动续签，cert-manager服务部署流程不包含在本文档范畴**
+**注意：**```本证书有效期为3个月，3个月到期后需要续签，如果不想手动续签可以部署cert-manager服务自动续签，cert-manager服务部署流程不包含在本文档范畴```
 
 ### 获取k8s集群内的ingress-nginx-controller端口
 

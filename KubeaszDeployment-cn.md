@@ -272,3 +272,13 @@ Password = ""                                 # The login password, if only a si
 2  MCS的Network当前固定为polygon.mainnet
 3  LAG和MCS的key官网流程都比较顺畅，因此我们没有专门额外写步骤
 ```
+
+### 执行Computing Provider
+
+建议创建service文件执行，或执行在tmux窗口中。
+
+```./computing-provider```
+
+### 检查运行状态
+
+[Provider Status](https://provider.lagrangedao.org/provider-status)

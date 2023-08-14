@@ -162,7 +162,9 @@ nvidia-smi
 
 ## 安装ingress-nginx controller
 
-```kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.1/deploy/static/provider/cloud/deploy.yaml```
+```
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.7.1/deploy/static/provider/cloud/deploy.yaml
+```
 
 ### 检查安装后的ingress-nginx-controller pod
 

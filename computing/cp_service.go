@@ -59,7 +59,14 @@ func ReceiveJob(c *gin.Context) {
 		return
 	}
 
-	hostName := generateString(10) + conf.GetConfig().API.Domain
+	var hostName string
+	prefixStr := generateString(10)
+	if strings.HasPrefix(conf.GetConfig().API.Domain, ".") {
+		hostName = prefixStr + conf.GetConfig().API.Domain
+	} else {
+		hostName = strings.Join([]string{prefixStr, conf.GetConfig().API.Domain}, ".")
+	}
+	
 	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)

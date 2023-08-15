@@ -228,7 +228,7 @@ func checkClusterProviderStatus() (string, error) {
 			logs.GetLogger().Infof("no gpu, status: %s", models.InactiveStatus)
 			return models.InactiveStatus, nil
 		} else {
-			return models.InactiveStatus, nil
+			return models.ActiveStatus, nil
 		}
 	}
 }

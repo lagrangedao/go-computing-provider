@@ -58,7 +58,12 @@ type DeleteJobReq struct {
 type SpaceJSON struct {
 	Data struct {
 		Files []SpaceFile `json:"files"`
+		Owner struct {
+			PublicAddress string `json:"public_address"`
+		} `json:"owner"`
 		Space struct {
+			Uuid        string `json:"uuid"`
+			Name        string `json:"name"`
 			ActiveOrder struct {
 				Config SpaceHardware `json:"config"`
 			} `json:"activeOrder"`

@@ -182,7 +182,7 @@ func (s *K8sService) DeleteIngress(ctx context.Context, nameSpace, ingressName s
 	return s.k8sClient.NetworkingV1().Ingresses(nameSpace).Delete(ctx, ingressName, metaV1.DeleteOptions{})
 }
 
-func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceName, basePath, configName string) (*coreV1.ConfigMap, error) {
+func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceUuid, basePath, configName string) (*coreV1.ConfigMap, error) {
 	configFilePath := filepath.Join(basePath, configName)
 
 	fileNameWithoutExt := filepath.Base(configName[:len(configName)-len(filepath.Ext(configName))])
@@ -194,7 +194,7 @@ func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceNam
 
 	configMap := &coreV1.ConfigMap{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name: spaceName + "-" + fileNameWithoutExt + "-" + generateString(4),
+			Name: spaceUuid + "-" + fileNameWithoutExt,
 		},
 		Data: map[string]string{
 			configName: string(iniData),
@@ -203,11 +203,11 @@ func (s *K8sService) CreateConfigMap(ctx context.Context, k8sNameSpace, spaceNam
 	return s.k8sClient.CoreV1().ConfigMaps(k8sNameSpace).Create(ctx, configMap, metaV1.CreateOptions{})
 }
 
-func (s *K8sService) GetPods(namespace, spaceName string) (bool, error) {
+func (s *K8sService) GetPods(namespace, spaceUuid string) (bool, error) {
 	listOption := metaV1.ListOptions{}
-	if spaceName != "" {
+	if spaceUuid != "" {
 		listOption = metaV1.ListOptions{
-			LabelSelector: fmt.Sprintf("lad_app=%s", spaceName),
+			LabelSelector: fmt.Sprintf("lad_app=%s", spaceUuid),
 		}
 	}
 	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), listOption)

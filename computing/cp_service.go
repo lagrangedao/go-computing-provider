@@ -44,20 +44,11 @@ func GetServiceProviderInfo(c *gin.Context) {
 
 func ReceiveJob(c *gin.Context) {
 	var jobData models.JobData
-
 	if err := c.ShouldBindJSON(&jobData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	logs.GetLogger().Infof("Job received: %s", jobData.JobSourceURI)
-	logs.GetLogger().Infof("Job Data: %+v", jobData)
-
-	jobSourceURI := jobData.JobSourceURI
-	creator, spaceName, err := getSpaceName(jobSourceURI)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed get space name: %v", err)
-		return
-	}
+	logs.GetLogger().Infof("Job received Data: %+v", jobData)
 
 	var hostName string
 	prefixStr := generateString(10)
@@ -66,8 +57,8 @@ func ReceiveJob(c *gin.Context) {
 	} else {
 		hostName = strings.Join([]string{prefixStr, conf.GetConfig().API.Domain}, ".")
 	}
-	
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
+
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobSourceURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -78,7 +69,7 @@ func ReceiveJob(c *gin.Context) {
 			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
 			return
 		}
-		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
+		logs.GetLogger().Infof("Job_uuid: %s, service running successfully, job_result_url: %s", jobData.UUID, result.(string))
 	}()
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
@@ -300,7 +291,7 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration int, jobUuid string) string {
+func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
 	var gpuName string
 	defer func() {
 		if gpuName != "" {
@@ -312,7 +303,6 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 			}
 		}
 	}()
-	logs.GetLogger().Infof("Attempting to download spaces from Lagrange. Spaces name: %s", spaceName)
 
 	resp, err := http.Get(jobSourceURI)
 	if err != nil {
@@ -337,8 +327,12 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 		return ""
 	}
 
+	creator := strings.ToLower(spaceJson.Data.Owner.PublicAddress)
+	spaceN := strings.ToLower(spaceJson.Data.Space.Name)
+	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
-	logs.GetLogger().Infof("spaceName: %s, hardwareName: %s", spaceName, spaceHardware.Description)
+
+	logs.GetLogger().Infof("uuid: %s, spaceName: %s, hardwareName: %s", spaceUuid, spaceN, spaceHardware.Description)
 	if len(spaceHardware.Description) == 0 {
 		return ""
 	}
@@ -355,24 +349,22 @@ func DeploySpaceTask(creator, spaceName, jobSourceURI, hostName string, duration
 	}
 
 	updateJobStatus(jobUuid, models.JobDownloadSource)
-	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceName, spaceJson.Data.Files)
+	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return ""
 	}
 
-	creator = strings.ToLower(creator)
-	spaceName = strings.ToLower(spaceName)
 	if containsYaml {
-		yamlToK8s(jobUuid, creator, spaceName, yamlPath, hostName, hardwareInfo, duration)
+		yamlToK8s(jobUuid, creator, spaceUuid, yamlPath, hostName, hardwareInfo, duration)
 	} else {
-		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceName, imagePath)
-		dockerfileToK8s(jobUuid, hostName, creator, spaceName, imageName, dockerfilePath, hardwareInfo, duration)
+		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceUuid, imagePath)
+		dockerfileToK8s(jobUuid, hostName, creator, spaceUuid, imageName, dockerfilePath, hardwareInfo, duration)
 	}
 	return hostName
 }
 
-func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, dockerfilePath string, hardwareResource models.Resource, duration int) {
+func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceUuid, imageName, dockerfilePath string, hardwareResource models.Resource, duration int) {
 	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
@@ -386,7 +378,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 
 	// first delete old resource
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
-	deleteJob(k8sNameSpace, spaceName)
+	deleteJob(k8sNameSpace, spaceUuid)
 
 	if err := deployNamespace(creatorWallet); err != nil {
 		logs.GetLogger().Error(err)
@@ -413,24 +405,24 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 			APIVersion: "apps/v1",
 		},
 		ObjectMeta: metaV1.ObjectMeta{
-			Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
+			Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid,
 			Namespace: k8sNameSpace,
 		},
 		Spec: appV1.DeploymentSpec{
 			Selector: &metaV1.LabelSelector{
-				MatchLabels: map[string]string{"lad_app": spaceName},
+				MatchLabels: map[string]string{"lad_app": spaceUuid},
 			},
 
 			Template: coreV1.PodTemplateSpec{
 				ObjectMeta: metaV1.ObjectMeta{
-					Labels:    map[string]string{"lad_app": spaceName},
+					Labels:    map[string]string{"lad_app": spaceUuid},
 					Namespace: k8sNameSpace,
 				},
 
 				Spec: coreV1.PodSpec{
 					NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
 					Containers: []coreV1.Container{{
-						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName,
+						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceUuid,
 						Image:           imageName,
 						ImagePullPolicy: coreV1.PullIfNotPresent,
 						Ports: []coreV1.ContainerPort{{
@@ -442,8 +434,8 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 								Value: creatorWallet,
 							},
 							{
-								Name:  "space_name",
-								Value: spaceName,
+								Name:  "space_uuid",
+								Value: spaceUuid,
 							},
 							{
 								Name:  "result_url",
@@ -481,19 +473,19 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceName, imageName, doc
 	updateJobStatus(jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-	if err := deployK8sResource(k8sNameSpace, spaceName, hostName, containerPort); err != nil {
+	if err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, containerPort); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
 	updateJobStatus(jobUuid, models.JobDeployToK8s)
 
-	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
+	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceUuid, int64(duration))
 	return
 }
 
-func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, hardwareResource models.Resource, duration int) {
+func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, hardwareResource models.Resource, duration int) {
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
-	deleteJob(k8sNameSpace, spaceName)
+	deleteJob(k8sNameSpace, spaceUuid)
 
 	containerResources, err := yaml.HandlerYaml(yamlPath)
 	if err != nil {
@@ -531,7 +523,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 		var volumes []coreV1.Volume
 		if cr.VolumeMounts.Path != "" {
 			fileNameWithoutExt := filepath.Base(cr.VolumeMounts.Name[:len(cr.VolumeMounts.Name)-len(filepath.Ext(cr.VolumeMounts.Name))])
-			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceName, filepath.Dir(yamlPath), cr.VolumeMounts.Name)
+			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceUuid, filepath.Dir(yamlPath), cr.VolumeMounts.Name)
 			if err != nil {
 				logs.GetLogger().Error(err)
 				return
@@ -539,7 +531,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 			configName := configMap.GetName()
 			volumes = []coreV1.Volume{
 				{
-					Name: spaceName + "-" + fileNameWithoutExt,
+					Name: spaceUuid + "-" + fileNameWithoutExt,
 					VolumeSource: coreV1.VolumeSource{
 						ConfigMap: &coreV1.ConfigMapVolumeSource{
 							LocalObjectReference: coreV1.LocalObjectReference{
@@ -551,7 +543,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 			}
 			volumeMount = []coreV1.VolumeMount{
 				{
-					Name:      spaceName + "-" + fileNameWithoutExt,
+					Name:      spaceUuid + "-" + fileNameWithoutExt,
 					MountPath: cr.VolumeMounts.Path,
 				},
 			}
@@ -562,7 +554,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 			var handler = new(coreV1.ExecAction)
 			handler.Command = depend.ReadyCmd
 			containers = append(containers, coreV1.Container{
-				Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + depend.Name,
+				Name:            spaceUuid + "-" + depend.Name,
 				Image:           depend.ImageName,
 				Command:         depend.Command,
 				Args:            depend.Args,
@@ -586,8 +578,8 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 				Value: creatorWallet,
 			},
 			{
-				Name:  "space_name",
-				Value: spaceName,
+				Name:  "space_uuid",
+				Value: spaceUuid,
 			},
 			{
 				Name:  "result_url",
@@ -600,7 +592,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 		}...)
 
 		containers = append(containers, coreV1.Container{
-			Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceName + "-" + cr.Name,
+			Name:            spaceUuid + "-" + cr.Name,
 			Image:           cr.ImageName,
 			Command:         cr.Command,
 			Args:            cr.Args,
@@ -630,17 +622,17 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 				APIVersion: "apps/v1",
 			},
 			ObjectMeta: metaV1.ObjectMeta{
-				Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceName,
+				Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid,
 				Namespace: k8sNameSpace,
 			},
 
 			Spec: appV1.DeploymentSpec{
 				Selector: &metaV1.LabelSelector{
-					MatchLabels: map[string]string{"lad_app": spaceName},
+					MatchLabels: map[string]string{"lad_app": spaceUuid},
 				},
 				Template: coreV1.PodTemplateSpec{
 					ObjectMeta: metaV1.ObjectMeta{
-						Labels:    map[string]string{"lad_app": spaceName},
+						Labels:    map[string]string{"lad_app": spaceUuid},
 						Namespace: k8sNameSpace,
 					},
 					Spec: coreV1.PodSpec{
@@ -660,13 +652,13 @@ func yamlToK8s(jobUuid, creatorWallet, spaceName, yamlPath, hostName string, har
 		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-		if err := deployK8sResource(k8sNameSpace, spaceName, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
+		if err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
 		updateJobStatus(jobUuid, models.JobDeployToK8s)
 
-		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceName, int64(duration))
+		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceUuid, int64(duration))
 	}
 }
 
@@ -702,18 +694,18 @@ func deployNamespace(creatorWallet string) error {
 	return nil
 }
 
-func deployK8sResource(k8sNameSpace, spaceName, hostName string, containerPort int64) error {
+func deployK8sResource(k8sNameSpace, spaceUuid, hostName string, containerPort int64) error {
 	k8sService := NewK8sService()
 
 	// create service
-	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceName, int32(containerPort))
+	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceUuid, int32(containerPort))
 	if err != nil {
 		return fmt.Errorf("failed creata service, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
 	// create ingress
-	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceName, hostName, int32(containerPort))
+	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceUuid, hostName, int32(containerPort))
 	if err != nil {
 		return fmt.Errorf("failed creata ingress, error: %w", err)
 	}
@@ -721,10 +713,10 @@ func deployK8sResource(k8sNameSpace, spaceName, hostName string, containerPort i
 	return nil
 }
 
-func deleteJob(namespace, spaceName string) {
-	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceName
-	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceName
-	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceName
+func deleteJob(namespace, spaceUuid string) {
+	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid
+	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceUuid
+	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceUuid
 
 	k8sService := NewK8sService()
 	if err := k8sService.DeleteIngress(context.TODO(), namespace, ingressName); err != nil && !errors.IsNotFound(err) {
@@ -756,13 +748,13 @@ func deleteJob(namespace, spaceName string) {
 	time.Sleep(6 * time.Second)
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
-	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete ReplicaSetsController, spaceName: %s, error: %+v", spaceName, err)
+	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceUuid); err != nil && !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete ReplicaSetsController, spaceUuid: %s, error: %+v", spaceUuid, err)
 		return
 	}
 
-	if err := k8sService.DeletePod(context.TODO(), namespace, spaceName); err != nil && !errors.IsNotFound(err) {
-		logs.GetLogger().Errorf("Failed delete pods, spaceName: %s, error: %+v", spaceName, err)
+	if err := k8sService.DeletePod(context.TODO(), namespace, spaceUuid); err != nil && !errors.IsNotFound(err) {
+		logs.GetLogger().Errorf("Failed delete pods, spaceUuid: %s, error: %+v", spaceUuid, err)
 		return
 	}
 
@@ -775,19 +767,19 @@ func deleteJob(namespace, spaceName string) {
 		if count >= 20 {
 			break
 		}
-		getPods, err := k8sService.GetPods(namespace, spaceName)
+		getPods, err := k8sService.GetPods(namespace, spaceUuid)
 		if err != nil && !errors.IsNotFound(err) {
 			logs.GetLogger().Errorf("Failed get pods form namespace, namepace: %s, error: %+v", namespace, err)
 			continue
 		}
 		if !getPods {
-			logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceName)
+			logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceUuid)
 			break
 		}
 	}
 }
 
-func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) {
+func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) {
 	conn := redisPool.Get()
 	_, err := conn.Do("SET", key, "wait-delete", "EX", runTime)
 	if err != nil {
@@ -798,7 +790,7 @@ func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) 
 	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
 	fields := map[string]string{
 		"k8s_namespace": namespace,
-		"space_name":    spaceName,
+		"space_uuid":    spaceUuid,
 		"expire_time":   strconv.Itoa(int(time.Now().Unix() + runTime)),
 	}
 	for key, val := range fields {
@@ -813,8 +805,8 @@ func watchContainerRunningTime(key, namespace, spaceName string, runTime int64) 
 			switch n := psc.Receive().(type) {
 			case redis.Message:
 				if n.Channel == "__keyevent@0__:expired" && string(n.Data) == key {
-					logs.GetLogger().Infof("The namespace: %s, spacename: %s, job has reached its runtime and will stop running.", namespace, spaceName)
-					deleteJob(namespace, spaceName)
+					logs.GetLogger().Infof("The namespace: %s, spaceUuid: %s, job has reached its runtime and will stop running.", namespace, spaceUuid)
+					deleteJob(namespace, spaceUuid)
 					redisPool.Get().Do("DEL", constants.REDIS_FULL_PREFIX+key)
 				}
 			case redis.Subscription:
@@ -876,7 +868,7 @@ func getLocation() (string, error) {
 		return "", err
 	}
 
-	return strings.TrimSpace(ipInfo.Region) + "-" + ipInfo.CountryCode, nil
+	return strings.TrimSpace(ipInfo.RegionName) + "-" + ipInfo.CountryCode, nil
 }
 
 func getLocalIPAddress() (string, error) {
@@ -922,7 +914,7 @@ func getHardwareDetail(description string) models.Resource {
 	hardwareResource.Memory.Quantity = mem
 	hardwareResource.Memory.Unit = strings.ReplaceAll(memSplits[2], "B", "")
 
-	hardwareResource.Storage.Quantity = 60
+	hardwareResource.Storage.Quantity = 30
 	hardwareResource.Storage.Unit = "Gi"
 	return hardwareResource
 }

@@ -251,17 +251,17 @@ func ReNewJob(c *gin.Context) {
 
 func DeleteJob(c *gin.Context) {
 	creatorWallet := c.Query("creator_wallet")
-	spaceName := c.Query("space_name")
+	spaceUuid := c.Query("space_uuid")
 
 	if creatorWallet == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
 	}
-	if spaceName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "space_name is required"})
+	if spaceUuid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "space_uuid is required"})
 	}
 
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
-	deleteJob(k8sNameSpace, spaceName)
+	deleteJob(k8sNameSpace, spaceUuid)
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 

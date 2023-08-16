@@ -38,7 +38,7 @@ func getSpaceName(apiURL string) (string, string, error) {
 	return creator, spaceName, nil
 }
 
-func BuildSpaceTaskImage(spaceName string, files []models.SpaceFile) (bool, string, string, error) {
+func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, string, string, error) {
 	var err error
 	buildFolder := "build/"
 	if len(files) > 0 {
@@ -51,7 +51,7 @@ func BuildSpaceTaskImage(spaceName string, files []models.SpaceFile) (bool, stri
 			if err = downloadFile(filepath.Join(buildFolder, file.Name), file.URL); err != nil {
 				return false, "", "", fmt.Errorf("error downloading file: %w", err)
 			}
-			logs.GetLogger().Infof("Download %s successfully.", spaceName)
+			logs.GetLogger().Infof("Download %s successfully.", spaceUuid)
 		}
 
 		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
@@ -70,7 +70,7 @@ func BuildSpaceTaskImage(spaceName string, files []models.SpaceFile) (bool, stri
 		}
 		return containsYaml, yamlPath, imagePath, nil
 	} else {
-		logs.GetLogger().Warnf("Space %s is not found.", spaceName)
+		logs.GetLogger().Warnf("Space %s is not found.", spaceUuid)
 	}
 	return false, "", "", NotFoundError
 }

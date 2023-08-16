@@ -127,13 +127,6 @@ func RedeployJob(c *gin.Context) {
 	}
 	logs.GetLogger().Infof("redeploy Job received: %+v", jobData)
 
-	jobSourceURI := jobData.JobSourceURI
-	creator, spaceName, err := getSpaceName(jobSourceURI)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed get space name: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	}
-
 	var hostName string
 	if jobData.JobResultURI != "" {
 		resp, err := http.Get(jobData.JobResultURI)
@@ -166,7 +159,7 @@ func RedeployJob(c *gin.Context) {
 		hostName = generateString(10) + conf.GetConfig().API.Domain
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, creator, spaceName, jobSourceURI, hostName, jobData.Duration, jobData.UUID)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobResultURI, hostName, jobData.Duration, jobData.UUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -179,7 +172,7 @@ func RedeployJob(c *gin.Context) {
 			logs.GetLogger().Errorf("Failed get sync task result, error: %v", err)
 			return
 		}
-		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobSourceURI, result.(string))
+		logs.GetLogger().Infof("Job: %s, service running successfully, job_result_url: %s", jobData.JobResultURI, result.(string))
 	}()
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
@@ -202,7 +195,7 @@ func ReNewJob(c *gin.Context) {
 	conn := redisPool.Get()
 	redisKey := constants.REDIS_FULL_PREFIX + jobData.JobUuid
 	args := []interface{}{redisKey}
-	args = append(args, "k8s_namespace", "space_name", "expire_time")
+	args = append(args, "k8s_namespace", "space_name", "expire_time", "space_uuid")
 	valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", redisKey, err)
@@ -216,12 +209,13 @@ func ReNewJob(c *gin.Context) {
 		namespace string
 		spaceName string
 		leftTime  int64
-		//bidStatus string
+		spaceUuid string
 	)
-	if len(valuesStr) >= 3 {
+	if len(valuesStr) >= 4 {
 		namespace = valuesStr[0]
 		spaceName = valuesStr[1]
 		expireTimeStr := valuesStr[2]
+		spaceUuid = valuesStr[3]
 		expireTime, err := strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
@@ -241,6 +235,7 @@ func ReNewJob(c *gin.Context) {
 			"k8s_namespace": namespace,
 			"space_name":    spaceName,
 			"expire_time":   strconv.Itoa(int(time.Now().Unix()) + int(leftTime) + jobData.Duration),
+			"space_uuid":    spaceUuid,
 		}
 		for key, val := range fields {
 			fullArgs = append(fullArgs, key, val)
@@ -328,11 +323,11 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	}
 
 	creator := strings.ToLower(spaceJson.Data.Owner.PublicAddress)
-	spaceN := strings.ToLower(spaceJson.Data.Space.Name)
+	spaceName := strings.ToLower(spaceJson.Data.Space.Name)
 	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
 
-	logs.GetLogger().Infof("uuid: %s, spaceName: %s, hardwareName: %s", spaceUuid, spaceN, spaceHardware.Description)
+	logs.GetLogger().Infof("uuid: %s, spaceName: %s, hardwareName: %s", spaceUuid, spaceName, spaceHardware.Description)
 	if len(spaceHardware.Description) == 0 {
 		return ""
 	}
@@ -773,7 +768,7 @@ func deleteJob(namespace, spaceUuid string) {
 			continue
 		}
 		if !getPods {
-			logs.GetLogger().Infof("Deleted all resource finised. spaceName %s", spaceUuid)
+			logs.GetLogger().Infof("Deleted all resource finised. spaceUuid: %s", spaceUuid)
 			break
 		}
 	}
@@ -790,9 +785,10 @@ func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) 
 	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
 	fields := map[string]string{
 		"k8s_namespace": namespace,
-		"space_uuid":    spaceUuid,
 		"expire_time":   strconv.Itoa(int(time.Now().Unix() + runTime)),
+		"space_uuid":    spaceUuid,
 	}
+
 	for key, val := range fields {
 		fullArgs = append(fullArgs, key, val)
 	}

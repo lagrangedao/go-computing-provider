@@ -75,12 +75,13 @@ func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, stri
 	return false, "", "", NotFoundError
 }
 
-func BuildImagesByDockerfile(jobUuid, spaceUuid, imagePath string) (string, string) {
+func BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath string) (string, string) {
 	updateJobStatus(jobUuid, models.JobBuildImage)
-	imageName := fmt.Sprintf("lagrange/%s:%d", spaceUuid, time.Now().Unix())
+	spaceFlag := spaceName + spaceUuid[:strings.LastIndex(spaceUuid, "-")]
+	imageName := fmt.Sprintf("lagrange/%s:%d", spaceFlag, time.Now().Unix())
 	if conf.GetConfig().Registry.ServerAddress != "" {
 		imageName = fmt.Sprintf("%s/%s:%d",
-			strings.TrimSpace(conf.GetConfig().Registry.ServerAddress), spaceUuid, time.Now().Unix())
+			strings.TrimSpace(conf.GetConfig().Registry.ServerAddress), spaceFlag, time.Now().Unix())
 	}
 	imageName = strings.ToLower(imageName)
 	dockerfilePath := filepath.Join(imagePath, "Dockerfile")

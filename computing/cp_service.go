@@ -353,7 +353,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	if containsYaml {
 		yamlToK8s(jobUuid, creator, spaceUuid, yamlPath, hostName, hardwareInfo, duration)
 	} else {
-		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceUuid, imagePath)
+		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath)
 		dockerfileToK8s(jobUuid, hostName, creator, spaceUuid, imageName, dockerfilePath, hardwareInfo, duration)
 	}
 	return hostName

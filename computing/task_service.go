@@ -147,10 +147,12 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("Failed report provider bid status, error: %+v", err)
 			}
 		}()
-		nodeId, _, _ := generateNodeID()
 
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+
+		logs.GetLogger().Infof("provider status: %s", models.ActiveStatus)
+		nodeId, _, _ := generateNodeID()
 
 		for range ticker.C {
 			providerStatus, err := checkClusterProviderStatus()
@@ -158,7 +160,9 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
 				return
 			}
-			logs.GetLogger().Infof("provider status: %s", providerStatus)
+			if providerStatus == models.InactiveStatus {
+				logs.GetLogger().Infof("provider status: %s", providerStatus)
+			}
 			updateProviderInfo(nodeId, "", "", providerStatus)
 		}
 

@@ -230,7 +230,7 @@ func watchExpiredTask() {
 			}
 			for _, key := range keys {
 				args := []interface{}{key}
-				args = append(args, "k8s_namespace", "space_name", "expire_time")
+				args = append(args, "k8s_namespace", "space_name", "expire_time", "space_uuid")
 				valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
 				if err != nil {
 					logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
@@ -241,14 +241,19 @@ func watchExpiredTask() {
 					namespace := valuesStr[0]
 					spaceName := valuesStr[1]
 					expireTimeStr := valuesStr[2]
+					spaceUuid := valuesStr[3]
 					expireTime, err := strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 					if err != nil {
 						logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
 						return
 					}
 					if time.Now().Unix() > expireTime {
-						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spacename: %s, the job has expired, and the service starting terminated", key, namespace, spaceName)
-						deleteJob(namespace, spaceName)
+						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spaceUuid: %s,expireTime: %s."+
+							"the job starting terminated", key, namespace, spaceUuid, time.Unix(expireTime, 0).Format("2006-01-02 15:04:05"))
+						if spaceName != "" {
+							deleteJob(namespace, spaceName)
+						}
+						deleteJob(namespace, spaceUuid)
 						deleteKey = append(deleteKey, key)
 					}
 				}

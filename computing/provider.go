@@ -62,7 +62,6 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 	if err != nil {
 		logs.GetLogger().Errorf("Error updating provider info: %v", err)
 	} else {
-		logs.GetLogger().Infof("Provider info sent. Status code: %d", resp.StatusCode)
 		if resp.StatusCode == 400 {
 			logs.GetLogger().Info(resp.Body)
 		}

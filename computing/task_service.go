@@ -38,7 +38,9 @@ func (s *ScheduleTask) Run() {
 			s.TaskMap.Range(func(key, value any) bool {
 				jobUuid := key.(string)
 				jobStatus := value.(models.JobStatus)
-				reportJobStatus(jobUuid, jobStatus)
+				if flag := reportJobStatus(jobUuid, jobStatus); flag {
+					s.TaskMap.Delete(jobUuid)
+				}
 				if jobStatus == models.JobDeployToK8s {
 					s.TaskMap.Delete(jobUuid)
 				}
@@ -48,7 +50,7 @@ func (s *ScheduleTask) Run() {
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -57,7 +59,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	payload, err := json.Marshal(reqParam)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
-		return
+		return false
 	}
 
 	client := &http.Client{}
@@ -65,7 +67,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
-		return
+		return false
 	}
 	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
@@ -73,15 +75,15 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
-		return
+		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
-		return
+		return true
 	}
 	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+	return false
 }
 
 func RunSyncTask() {
@@ -145,10 +147,12 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("Failed report provider bid status, error: %+v", err)
 			}
 		}()
-		nodeId, _, _ := generateNodeID()
 
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+
+		logs.GetLogger().Infof("provider status: %s", models.ActiveStatus)
+		nodeId, _, _ := generateNodeID()
 
 		for range ticker.C {
 			providerStatus, err := checkClusterProviderStatus()
@@ -156,7 +160,9 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
 				return
 			}
-			logs.GetLogger().Infof("provider status: %s", providerStatus)
+			if providerStatus == models.InactiveStatus {
+				logs.GetLogger().Infof("provider status: %s", providerStatus)
+			}
 			updateProviderInfo(nodeId, "", "", providerStatus)
 		}
 
@@ -203,10 +209,9 @@ func reportClusterResource(location, nodeId string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
+		logs.GetLogger().Errorf("report cluster node resources failed, status code: %d", resp.StatusCode)
 		return
 	}
-	logs.GetLogger().Info("report cluster node resources successfully")
 }
 
 func watchExpiredTask() {

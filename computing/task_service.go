@@ -38,7 +38,9 @@ func (s *ScheduleTask) Run() {
 			s.TaskMap.Range(func(key, value any) bool {
 				jobUuid := key.(string)
 				jobStatus := value.(models.JobStatus)
-				reportJobStatus(jobUuid, jobStatus)
+				if flag := reportJobStatus(jobUuid, jobStatus); flag {
+					s.TaskMap.Delete(jobUuid)
+				}
 				if jobStatus == models.JobDeployToK8s {
 					s.TaskMap.Delete(jobUuid)
 				}
@@ -48,7 +50,7 @@ func (s *ScheduleTask) Run() {
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -57,7 +59,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	payload, err := json.Marshal(reqParam)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
-		return
+		return false
 	}
 
 	client := &http.Client{}
@@ -65,7 +67,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
-		return
+		return false
 	}
 	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
@@ -73,15 +75,15 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
-		return
+		return false
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
-		return
+		return true
 	}
 	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+	return false
 }
 
 func RunSyncTask() {
@@ -145,10 +147,12 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("Failed report provider bid status, error: %+v", err)
 			}
 		}()
-		nodeId, _, _ := generateNodeID()
 
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+
+		logs.GetLogger().Infof("provider status: %s", models.ActiveStatus)
+		nodeId, _, _ := generateNodeID()
 
 		for range ticker.C {
 			providerStatus, err := checkClusterProviderStatus()
@@ -156,7 +160,9 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
 				return
 			}
-			logs.GetLogger().Infof("provider status: %s", providerStatus)
+			if providerStatus == models.InactiveStatus {
+				logs.GetLogger().Infof("provider status: %s", providerStatus)
+			}
 			updateProviderInfo(nodeId, "", "", providerStatus)
 		}
 
@@ -203,10 +209,9 @@ func reportClusterResource(location, nodeId string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
+		logs.GetLogger().Errorf("report cluster node resources failed, status code: %d", resp.StatusCode)
 		return
 	}
-	logs.GetLogger().Info("report cluster node resources successfully")
 }
 
 func watchExpiredTask() {
@@ -230,7 +235,7 @@ func watchExpiredTask() {
 			}
 			for _, key := range keys {
 				args := []interface{}{key}
-				args = append(args, "k8s_namespace", "space_name", "expire_time")
+				args = append(args, "k8s_namespace", "space_name", "expire_time", "space_uuid")
 				valuesStr, err := redis.Strings(conn.Do("HMGET", args...))
 				if err != nil {
 					logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
@@ -241,14 +246,19 @@ func watchExpiredTask() {
 					namespace := valuesStr[0]
 					spaceName := valuesStr[1]
 					expireTimeStr := valuesStr[2]
+					spaceUuid := valuesStr[3]
 					expireTime, err := strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 					if err != nil {
 						logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
 						return
 					}
 					if time.Now().Unix() > expireTime {
-						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spacename: %s, the job has expired, and the service starting terminated", key, namespace, spaceName)
-						deleteJob(namespace, spaceName)
+						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spaceUuid: %s,expireTime: %s."+
+							"the job starting terminated", key, namespace, spaceUuid, time.Unix(expireTime, 0).Format("2006-01-02 15:04:05"))
+						if spaceName != "" {
+							deleteJob(namespace, spaceName)
+						}
+						deleteJob(namespace, spaceUuid)
 						deleteKey = append(deleteKey, key)
 					}
 				}

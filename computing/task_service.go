@@ -205,10 +205,9 @@ func reportClusterResource(location, nodeId string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Errorf("The request url: %s, returns a non-200 status code: %d", url, resp.StatusCode)
+		logs.GetLogger().Errorf("report cluster node resources failed, status code: %d", resp.StatusCode)
 		return
 	}
-	logs.GetLogger().Info("report cluster node resources successfully")
 }
 
 func watchExpiredTask() {

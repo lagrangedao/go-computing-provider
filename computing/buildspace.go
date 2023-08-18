@@ -56,8 +56,9 @@ func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, stri
 		imagePath := getDownloadPath(files[0].Name)
 		var containsYaml bool
 		var yamlPath string
-		err = filepath.Walk(imagePath, func(path string, info fs.FileInfo, err error) error {
-			if strings.HasSuffix(info.Name(), "deploy.yaml") || strings.HasSuffix(info.Name(), "deploy.yml") {
+
+		err = filepath.WalkDir(imagePath, func(path string, d fs.DirEntry, err error) error {
+			if strings.HasSuffix(d.Name(), "deploy.yaml") || strings.HasSuffix(d.Name(), "deploy.yml") {
 				containsYaml = true
 				yamlPath = path
 				return filepath.SkipDir

@@ -42,7 +42,6 @@ func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, stri
 	var err error
 	buildFolder := "build/"
 	if len(files) > 0 {
-		downloadSpacePath := filepath.Join(filepath.Dir(files[0].Name), filepath.Base(files[0].Name))
 		for _, file := range files {
 			dirPath := filepath.Dir(file.Name)
 			if err = os.MkdirAll(filepath.Join(buildFolder, dirPath), os.ModePerm); err != nil {
@@ -54,7 +53,7 @@ func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, stri
 			logs.GetLogger().Infof("Download %s successfully.", spaceUuid)
 		}
 
-		imagePath := filepath.Join(buildFolder, filepath.Dir(downloadSpacePath))
+		imagePath := getDownloadPath(files[0].Name)
 		var containsYaml bool
 		var yamlPath string
 		err = filepath.Walk(imagePath, func(path string, info fs.FileInfo, err error) error {
@@ -73,6 +72,11 @@ func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, stri
 		logs.GetLogger().Warnf("Space %s is not found.", spaceUuid)
 	}
 	return false, "", "", NotFoundError
+}
+
+func getDownloadPath(fileName string) string {
+	splits := strings.Split(fileName, "/")
+	return filepath.Join(splits[0], splits[1], splits[2])
 }
 
 func BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath string) (string, string) {

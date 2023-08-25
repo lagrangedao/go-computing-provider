@@ -287,6 +287,12 @@ func StatisticalSources(c *gin.Context) {
 }
 
 func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
+	defer func() {
+		if err := recover(); err != nil {
+			logs.GetLogger().Errorf("deploy space task painc, error: %+v", err)
+			return
+		}
+	}()
 	var gpuName string
 	defer func() {
 		if gpuName != "" {

@@ -72,7 +72,7 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("Job_uuid: %s, service running successfully, job_result_url: %s", jobData.UUID, result.(string))
 	}()
 
-	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
+	jobData.JobResultURI = ""
 	submitJob(&jobData)
 	updateJobStatus(jobData.UUID, models.JobUploadResult)
 	c.JSON(http.StatusOK, jobData)

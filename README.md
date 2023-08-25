@@ -34,6 +34,8 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 
 
 ## Install the Kubernetes
+The Kubernetes version should be `v1.24.0+`
+
 ###  Install Container Runtime Environment
 If you plan to run a Kubernetes cluster, you need to install a container runtime into each node in the cluster so that Pods can run there, refer to [here](https://kubernetes.io/docs/setup/production-environment/container-runtimes/). And you just need to choose one option to install the `Container Runtime Environment`
 

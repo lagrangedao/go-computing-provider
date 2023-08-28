@@ -99,7 +99,7 @@ func TestNewStorageService(t *testing.T) {
 }
 
 func TestYamlToK8s(t *testing.T) {
-	containerResources, err := yaml.HandlerYaml("/Users/sonic/Documents/python_space/go-computing-provider/CodiMD.yaml")
+	containerResources, err := yaml.HandlerYaml("/Users/zhanglong/Documents/go-computing-provider/dd.yaml")
 	if err != nil {
 		log.Fatalln(err)
 	}

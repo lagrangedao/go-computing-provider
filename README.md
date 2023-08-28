@@ -34,6 +34,8 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 
 
 ## Install the Kubernetes
+The Kubernetes version should be `v1.24.0+`
+
 ###  Install Container Runtime Environment
 If you plan to run a Kubernetes cluster, you need to install a container runtime into each node in the cluster so that Pods can run there, refer to [here](https://kubernetes.io/docs/setup/production-environment/container-runtimes/). And you just need to choose one option to install the `Container Runtime Environment`
 
@@ -67,7 +69,7 @@ sudo docker run --detach \
   --publish 5000:5000 \
   registry:2
 ```
-![1](https://github.com/FogMeta/docs/assets/102578774/07ad0806-4034-4b61-a405-4bd2f4a675b8)
+![1](https://github.com/lagrangedao/go-computing-provider/assets/102578774/0c4cd53d-fb5f-43d9-b804-be83faf33986)
 
 
 * Add the registry server to the node
@@ -111,7 +113,7 @@ Finally, you can check the installation by the command:
 ```bash
 docker system info
 ```
-![2](https://github.com/FogMeta/docs/assets/102578774/d4ed0461-ec0e-4e72-9772-32387bc529a4)
+![2](https://github.com/lagrangedao/go-computing-provider/assets/102578774/4cfc1981-3fca-415c-948f-86c496915cff)
 
 
 
@@ -123,15 +125,6 @@ To create a Kubernetes cluster, you can use a container management tool like `ku
 
 * [Create a Kubernetes cluster with kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/) 
 
-If you have installed it correctly, you can see the result shown in the figure by the command `kubectl get po -A`
-
-![3](https://github.com/FogMeta/docs/assets/102578774/4ff7a854-5042-4380-89fd-c821e220d6b2)
-
-**Note:** 
- - If you are a single-host Kubernetes cluster, remember to remove the taint mark, otherwise, the task can not be scheduled to it.
-```bash
-kubectl taint node ${nodeName}  node-role.kubernetes.io/control-plane:NoSchedule-
-```
 
 ### Install the Network Plugin
 Calico is an open-source **networking and network security solution for containers**, virtual machines, and native host-based workloads. Calico supports a broad range of platforms including **Kubernetes**, OpenShift, Mirantis Kubernetes Engine (MKE), OpenStack, and bare metal services.
@@ -156,6 +149,15 @@ watch kubectl get pods -n calico-system
 kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 kubectl taint nodes --all node-role.kubernetes.io/master-
 ```
+If you have installed it correctly, you can see the result shown in the figure by the command `kubectl get po -A`
+
+![3](https://github.com/lagrangedao/go-computing-provider/assets/102578774/91ef353f-72af-41b2-82e8-061b92bfb999)
+
+**Note:** 
+ - If you are a single-host Kubernetes cluster, remember to remove the taint mark, otherwise, the task can not be scheduled to it.
+```bash
+kubectl taint node ${nodeName}  node-role.kubernetes.io/control-plane:NoSchedule-
+```
 
 ### Install the NVIDIA Plugin
 If your computing provider wants to provide a GPU resource, the NVIDIA Plugin should be installed, please follow the steps:
@@ -168,8 +170,7 @@ If your computing provider wants to provide a GPU resource, the NVIDIA Plugin sh
 If you have installed it correctly, you can see the result shown in the figure by the command 
 `kubectl get po -n kube-system`
 
-![4](https://github.com/FogMeta/docs/assets/102578774/c3e408a4-75b9-46ed-9769-0b1dd56408e6)
-
+![4](https://github.com/lagrangedao/go-computing-provider/assets/102578774/8209c589-d561-43ad-adea-5ecb52618909)
 
 ### Install the Ingress-nginx Controller
 The `ingress-nginx` is an ingress controller for Kubernetes using `NGINX` as a reverse proxy and load balancer. You can run the following command to install it:
@@ -180,11 +181,11 @@ If you have installed it correctly, you can see the result shown in the figure b
 
  - Run `kubectl get po -n ingress-nginx`
 
-![5](https://github.com/FogMeta/docs/assets/102578774/1fe1ed6e-e1e1-4aed-8e66-af5b58e02ddf)
+![5](https://github.com/lagrangedao/go-computing-provider/assets/102578774/f3c0585a-df19-4971-91fe-d03365f4edee)
 
  - Run `kubectl get svc -n ingress-nginx`
 
-![6](https://github.com/FogMeta/docs/assets/102578774/464376fc-f62f-41f4-b8d1-c3ca713c2250)
+![6](https://github.com/lagrangedao/go-computing-provider/assets/102578774/e3b3dadc-77c1-4dc0-843c-5b946e252b65)
 
 ### Install and config the Nginx
  -  Install `Nginx` service to the Server
@@ -272,7 +273,7 @@ EOF
 ```
 If you have installed it correctly, you can see the result shown in the figure by the command:
 `kubectl get po -n kube-system`
-![7](https://github.com/FogMeta/docs/assets/102578774/42b3c06a-fc3f-4ef9-a658-04943af2b6d0)
+![7](https://github.com/lagrangedao/go-computing-provider/assets/102578774/38b0e15f-5ff9-4edc-a313-d0f6f4a0bda8)
 
 ### Install Redis service
  - Install the `redis-server`

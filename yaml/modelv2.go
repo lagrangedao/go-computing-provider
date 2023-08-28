@@ -3,7 +3,6 @@ package yaml
 import (
 	"gopkg.in/errgo.v2/errors"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 )
 
@@ -74,35 +73,17 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 						}
 					}
 
-					//var resourceList = make(corev1.ResourceList)
-					//if cpRs, ok := dy.Profiles.Compute[deployment.Akash.Profile]; ok {
-					//	if cpRs.Resources.Cpu.Units != "" {
-					//		resourceList[corev1.ResourceCPU] = resource.MustParse(cpRs.Resources.Cpu.Units)
-					//	}
-					//	if cpRs.Resources.Memory.Size != "" {
-					//		resourceList[corev1.ResourceMemory] = resource.MustParse(cpRs.Resources.Memory.Size)
-					//	}
-					//	if cpRs.Resources.Storage.Size != "" {
-					//		resourceList[corev1.ResourceStorage] = resource.MustParse(cpRs.Resources.Storage.Size)
-					//	}
-					//	if cpRs.Resources.Gpu.Model != "" {
-					//		if strings.Contains(cpRs.Resources.Gpu.Model, "amd") {
-					//
-					//		}
-					//		if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
-					//			resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
-					//			//resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
-					//			container.GpuModel = cpRs.Resources.Gpu.Model
-					//		}
-					//	}
-					//}
-
 					if len(service.ReadyCmd) > 0 {
 						container.ReadyCmd = service.ReadyCmd
 					}
 
-					//container.ResourceLimit = resourceList
-					container.Count = deployment.Akash.Count
+					if deployment.Akash.Count != 0 {
+						container.Count = deployment.Akash.Count
+					}
+					if deployment.Lagrange.Count != 0 {
+						container.Count = deployment.Lagrange.Count
+					}
+
 					depends = append(depends, *container)
 					waitDelete = append(waitDelete, depend)
 				}
@@ -145,31 +126,13 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 			}
 		}
 
-		var resourceList = make(corev1.ResourceList)
-		if cpRs, ok := dy.Profiles.Compute[deployment.Akash.Profile]; ok {
-			if cpRs.Resources.Cpu.Units != "" {
-				resourceList[corev1.ResourceCPU] = resource.MustParse(cpRs.Resources.Cpu.Units)
-			}
-			if cpRs.Resources.Memory.Size != "" {
-				resourceList[corev1.ResourceMemory] = resource.MustParse(cpRs.Resources.Memory.Size)
-			}
-			if cpRs.Resources.Storage.Size != "" {
-				resourceList[corev1.ResourceStorage] = resource.MustParse(cpRs.Resources.Storage.Size)
-			}
-
-			if cpRs.Resources.Gpu.Model != "" {
-				if strings.Contains(cpRs.Resources.Gpu.Model, "amd") {
-
-				}
-				if strings.Contains(cpRs.Resources.Gpu.Model, "nvidia") {
-					resourceList["nvidia.com/gpu"] = resource.MustParse(cpRs.Resources.Gpu.Units)
-					//resourceList["nvidia.com/gpu-memory"] = resource.MustParse(cpRs.Resources.Gpu.Size)
-					containerNew.GpuModel = cpRs.Resources.Gpu.Model
-				}
-			}
+		containerNew.ResourceLimit = make(corev1.ResourceList)
+		if deployment.Akash.Count != 0 {
+			containerNew.Count = deployment.Akash.Count
 		}
-		containerNew.ResourceLimit = resourceList
-		containerNew.Count = deployment.Akash.Count
+		if deployment.Lagrange.Count != 0 {
+			containerNew.Count = deployment.Lagrange.Count
+		}
 		containers = append(containers, *containerNew)
 	}
 
@@ -242,6 +205,10 @@ type Deployment struct {
 		Profile string `yaml:"profile"`
 		Count   int    `yaml:"count"`
 	} `yaml:"akash"`
+	Lagrange struct {
+		Profile string `yaml:"profile"`
+		Count   int    `yaml:"count"`
+	} `yaml:"lagrange"`
 }
 
 func getProtocol(proto string) corev1.Protocol {

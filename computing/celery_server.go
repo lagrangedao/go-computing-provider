@@ -28,9 +28,9 @@ func newRedisPool(url string, password string) *redis.Pool {
 			var conn redis.Conn
 			var err error
 			if password != "" {
-				conn, err = redis.DialURL(url)
-			} else {
 				conn, err = redis.DialURL(url, redis.DialPassword(password))
+			} else {
+				conn, err = redis.DialURL(url)
 			}
 			if err != nil {
 				return nil, err

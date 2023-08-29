@@ -320,6 +320,12 @@ func GetSpaceLog(c *gin.Context) {
 }
 
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
+	var isClose bool
+	conn.SetCloseHandler(func(closeCode int, text string) error {
+		isClose = true
+		conn.Close()
+		return nil
+	})
 
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
@@ -381,13 +387,8 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 					return
 				}
 
-				if _, _, err = conn.ReadMessage(); err != nil {
-					if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-						logs.GetLogger().Warn("Client closed the connection")
-					} else {
-						logs.GetLogger().Errorf("WebSocket error: %v", err)
-					}
-					return
+				if isClose {
+					break
 				}
 			}
 		}

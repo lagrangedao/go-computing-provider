@@ -318,7 +318,6 @@ func GetSpaceLog(c *gin.Context) {
 			sendBuildLogs(conn, buildLogPath)
 		} else if strings.TrimSpace(logType) == "container" {
 			k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
-			containerName := constants.K8S_CONTAINER_NAME_PREFIX + spaceDetail.SpaceUuid
 
 			k8sService := NewK8sService()
 			pods, err := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).List(context.TODO(), metaV1.ListOptions{
@@ -331,8 +330,9 @@ func GetSpaceLog(c *gin.Context) {
 
 			if len(pods.Items) > 0 {
 				req := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).GetLogs(pods.Items[0].Name, &v1.PodLogOptions{
-					Container: containerName,
-					Follow:    true,
+					Container:  "",
+					Follow:     true,
+					Timestamps: true,
 				})
 
 				podLogs, err := req.Stream(context.Background())

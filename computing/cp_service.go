@@ -69,13 +69,16 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("Job_uuid: %s, service running successfully, job_result_url: %s", jobData.UUID, result.(string))
 	}()
 
-	jobData.JobResultURI = ""
-	submitJob(&jobData)
-	updateJobStatus(jobData.UUID, models.JobUploadResult)
+	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
+	if err = submitJob(&jobData); err != nil {
+		jobData.JobResultURI = ""
+	} else {
+		updateJobStatus(jobData.UUID, models.JobUploadResult)
+	}
 	c.JSON(http.StatusOK, jobData)
 }
 
-func submitJob(jobData *models.JobData) {
+func submitJob(jobData *models.JobData) error {
 	logs.GetLogger().Printf("submitting job...")
 	oldMask := syscall.Umask(0)
 	defer syscall.Umask(oldMask)
@@ -91,18 +94,18 @@ func submitJob(jobData *models.JobData) {
 	bytes, err := json.Marshal(jobData)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed Marshal JobData, error: %v", err)
-		return
+		return err
 	}
 	if err = os.WriteFile(taskDetailFilePath, bytes, os.ModePerm); err != nil {
 		logs.GetLogger().Errorf("Failed jobData write to file, error: %v", err)
-		return
+		return err
 	}
 
 	storageService := NewStorageService()
 	mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
-		return
+		return err
 	}
 	mcsFileJson, _ := json.Marshal(mcsOssFile)
 	logs.GetLogger().Printf("Job submitted to IPFS %s", string(mcsFileJson))
@@ -110,9 +113,10 @@ func submitJob(jobData *models.JobData) {
 	gatewayUrl, err := storageService.GetGatewayUrl()
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
-		return
+		return err
 	}
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
+	return nil
 }
 
 func RedeployJob(c *gin.Context) {
@@ -173,7 +177,11 @@ func RedeployJob(c *gin.Context) {
 	}()
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
-	submitJob(&jobData)
+	if err = submitJob(&jobData); err != nil {
+		jobData.JobResultURI = ""
+	} else {
+		updateJobStatus(jobData.UUID, models.JobUploadResult)
+	}
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -311,10 +319,15 @@ func GetSpaceLog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 
-	if strings.TrimSpace(logType) == "build" {
+	go handleConnection(conn, spaceDetail, logType)
+
+}
+
+func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
+	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
 		sendBuildLogs(conn, buildLogPath)
-	} else if strings.TrimSpace(logType) == "container" {
+	} else if logType == "container" {
 		k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
 
 		k8sService := NewK8sService()
@@ -322,7 +335,7 @@ func GetSpaceLog(c *gin.Context) {
 			LabelSelector: fmt.Sprintf("lad_app=%s", spaceDetail.SpaceUuid),
 		})
 		if err != nil {
-			fmt.Printf("Error listing Pods: %v\n", err)
+			logs.GetLogger().Errorf("Error listing Pods: %v", err)
 			return
 		}
 
@@ -335,7 +348,7 @@ func GetSpaceLog(c *gin.Context) {
 
 			podLogs, err := req.Stream(context.Background())
 			if err != nil {
-				fmt.Printf("Error opening log stream: %v\n", err)
+				logs.GetLogger().Errorf("Error opening log stream: %v", err)
 				return
 			}
 			defer podLogs.Close()
@@ -345,22 +358,27 @@ func GetSpaceLog(c *gin.Context) {
 				line, err := reader.ReadString('\n')
 				if err != nil {
 					if err == io.EOF {
-						// End of log stream
 						break
 					}
-					fmt.Printf("Error reading log: %v\n", err)
+					logs.GetLogger().Errorf("Error reading log: %v", err)
 					return
 				}
 
-				err = conn.WriteMessage(websocket.TextMessage, []byte(line))
-				if err != nil {
-					fmt.Printf("Error sending log to WebSocket: %v\n", err)
+				if err = conn.WriteMessage(websocket.TextMessage, []byte(line)); err != nil {
+					logs.GetLogger().Errorf("Error sending log to WebSocket: %v", err)
+					return
+				}
+
+				if _, _, err = conn.ReadMessage(); err != nil {
+					if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+						logs.GetLogger().Warn("Client closed the connection")
+					} else {
+						logs.GetLogger().Errorf("WebSocket error: %v", err)
+					}
 					return
 				}
 			}
 		}
-	} else {
-		return
 	}
 }
 
@@ -588,7 +606,7 @@ func getLocalIPAddress() (string, error) {
 	return strings.TrimSpace(string(ipBytes)), nil
 }
 
-func retrieveJobMetadata(key string) (*models.CacheSpaceDetail, error) {
+func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	redisConn := redisPool.Get()
 	defer redisConn.Close()
 
@@ -596,7 +614,7 @@ func retrieveJobMetadata(key string) (*models.CacheSpaceDetail, error) {
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
-		return nil, err
+		return models.CacheSpaceDetail{}, err
 	}
 
 	var (
@@ -615,11 +633,11 @@ func retrieveJobMetadata(key string) (*models.CacheSpaceDetail, error) {
 		expireTime, err = strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
-			return nil, err
+			return models.CacheSpaceDetail{}, err
 		}
 	}
 
-	return &models.CacheSpaceDetail{
+	return models.CacheSpaceDetail{
 		WalletAddress: walletAddress,
 		SpaceName:     spaceName,
 		SpaceUuid:     spaceUuid,

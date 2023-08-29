@@ -282,23 +282,6 @@ func StatisticalSources(c *gin.Context) {
 }
 
 func GetSpaceLog(c *gin.Context) {
-	w := c.Writer
-	r := c.Request
-
-	var wsUpgrade = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-	conn, err := wsUpgrade.Upgrade(w, r, nil)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed to set websocket upgrade: %+v", err)
-		return
-	}
-	defer conn.Close()
-
 	spaceUuid := c.Query("space_id")
 	logType := c.Query("type")
 	if strings.TrimSpace(spaceUuid) == "" {
@@ -319,11 +302,25 @@ func GetSpaceLog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 
-	go handleConnection(conn, spaceDetail, logType)
+	go handleConnection(c, spaceDetail, logType)
 
 }
 
-func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
+func handleConnection(c *gin.Context, spaceDetail models.CacheSpaceDetail, logType string) {
+	var wsUpgrade = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+	conn, err := wsUpgrade.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed to set websocket upgrade: %+v", err)
+		return
+	}
+	defer conn.Close()
+
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
 		sendBuildLogs(conn, buildLogPath)

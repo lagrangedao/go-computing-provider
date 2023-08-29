@@ -323,6 +323,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 	var isClose bool
 	conn.SetCloseHandler(func(closeCode int, text string) error {
 		isClose = true
+		logs.GetLogger().Infof("connection colsed, space_uuid: %s", spaceDetail.SpaceUuid)
 		conn.Close()
 		return nil
 	})
@@ -373,6 +374,9 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 
 			reader := bufio.NewReader(podLogs)
 			for {
+				if isClose {
+					break
+				}
 				line, err := reader.ReadString('\n')
 				if err != nil {
 					if err == io.EOF {
@@ -387,9 +391,6 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 					return
 				}
 
-				if isClose {
-					break
-				}
 			}
 		}
 	}

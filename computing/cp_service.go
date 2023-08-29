@@ -294,6 +294,7 @@ func GetSpaceLog(c *gin.Context) {
 		logs.GetLogger().Errorf("Failed to set websocket upgrade: %+v", err)
 		return
 	}
+	defer conn.Close()
 
 	spaceUuid := c.Query("space_id")
 	logType := c.Query("type")
@@ -316,15 +317,28 @@ func GetSpaceLog(c *gin.Context) {
 	}
 
 	handleConnection(conn, spaceDetail, logType)
-
 }
 
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
-	defer conn.Close()
 
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
-		sendBuildLogs(conn, buildLogPath)
+		buildLog, err := os.Open(buildLogPath)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed to open build log file: %+v", err)
+			return
+		}
+		defer buildLog.Close()
+
+		scanner := bufio.NewScanner(buildLog)
+		for scanner.Scan() {
+			err := conn.WriteMessage(websocket.TextMessage, scanner.Bytes())
+			if err != nil {
+				logs.GetLogger().Errorf("Failed to send build log: %+v", err)
+				return
+			}
+		}
+
 	} else if logType == "container" {
 		k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
 
@@ -641,22 +655,4 @@ func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		SpaceUuid:     spaceUuid,
 		ExpireTime:    expireTime,
 	}, nil
-}
-
-func sendBuildLogs(conn *websocket.Conn, logPath string) {
-	buildLog, err := os.Open(logPath)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed to open build log file: %+v", err)
-		return
-	}
-	defer buildLog.Close()
-
-	scanner := bufio.NewScanner(buildLog)
-	for scanner.Scan() {
-		err := conn.WriteMessage(websocket.TextMessage, scanner.Bytes())
-		if err != nil {
-			logs.GetLogger().Errorf("Failed to send build log: %+v", err)
-			return
-		}
-	}
 }

@@ -311,53 +311,50 @@ func GetSpaceLog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 
-	go func() {
+	if strings.TrimSpace(logType) == "build" {
+		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
+		sendBuildLogs(conn, buildLogPath)
+	} else if strings.TrimSpace(logType) == "container" {
+		k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
 
-		if strings.TrimSpace(logType) == "build" {
-			buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
-			sendBuildLogs(conn, buildLogPath)
-		} else if strings.TrimSpace(logType) == "container" {
-			k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
-
-			k8sService := NewK8sService()
-			pods, err := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).List(context.TODO(), metaV1.ListOptions{
-				LabelSelector: fmt.Sprintf("lad_app=%s", spaceDetail.SpaceUuid),
-			})
-			if err != nil {
-				fmt.Printf("Error listing Pods: %v\n", err)
-				return
-			}
-
-			if len(pods.Items) > 0 {
-				req := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).GetLogs(pods.Items[0].Name, &v1.PodLogOptions{
-					Container:  "",
-					Follow:     true,
-					Timestamps: true,
-				})
-
-				podLogs, err := req.Stream(context.Background())
-				if err != nil {
-					fmt.Printf("Error opening log stream: %v\n", err)
-					return
-				}
-				defer podLogs.Close()
-
-				buf := make([]byte, 1024)
-				for {
-					n, err := podLogs.Read(buf)
-					if err != nil {
-						return
-					}
-					err = conn.WriteMessage(websocket.TextMessage, buf[:n])
-					if err != nil {
-						return
-					}
-				}
-			}
-		} else {
+		k8sService := NewK8sService()
+		pods, err := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).List(context.TODO(), metaV1.ListOptions{
+			LabelSelector: fmt.Sprintf("lad_app=%s", spaceDetail.SpaceUuid),
+		})
+		if err != nil {
+			fmt.Printf("Error listing Pods: %v\n", err)
 			return
 		}
-	}()
+
+		if len(pods.Items) > 0 {
+			req := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).GetLogs(pods.Items[0].Name, &v1.PodLogOptions{
+				Container:  "",
+				Follow:     true,
+				Timestamps: true,
+			})
+
+			podLogs, err := req.Stream(context.Background())
+			if err != nil {
+				fmt.Printf("Error opening log stream: %v\n", err)
+				return
+			}
+			defer podLogs.Close()
+
+			buf := make([]byte, 1024)
+			for {
+				n, err := podLogs.Read(buf)
+				if err != nil {
+					return
+				}
+				err = conn.WriteMessage(websocket.TextMessage, buf[:n])
+				if err != nil {
+					return
+				}
+			}
+		}
+	} else {
+		return
+	}
 }
 
 func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {

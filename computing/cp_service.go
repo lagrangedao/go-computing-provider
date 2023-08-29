@@ -72,13 +72,16 @@ func ReceiveJob(c *gin.Context) {
 		logs.GetLogger().Infof("Job_uuid: %s, service running successfully, job_result_url: %s", jobData.UUID, result.(string))
 	}()
 
-	jobData.JobResultURI = ""
-	submitJob(&jobData)
-	updateJobStatus(jobData.UUID, models.JobUploadResult)
+	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
+	if err = submitJob(&jobData); err != nil {
+		jobData.JobResultURI = ""
+	} else {
+		updateJobStatus(jobData.UUID, models.JobUploadResult)
+	}
 	c.JSON(http.StatusOK, jobData)
 }
 
-func submitJob(jobData *models.JobData) {
+func submitJob(jobData *models.JobData) error {
 	logs.GetLogger().Printf("submitting job...")
 	oldMask := syscall.Umask(0)
 	defer syscall.Umask(oldMask)
@@ -94,18 +97,18 @@ func submitJob(jobData *models.JobData) {
 	bytes, err := json.Marshal(jobData)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed Marshal JobData, error: %v", err)
-		return
+		return err
 	}
 	if err = os.WriteFile(taskDetailFilePath, bytes, os.ModePerm); err != nil {
 		logs.GetLogger().Errorf("Failed jobData write to file, error: %v", err)
-		return
+		return err
 	}
 
 	storageService := NewStorageService()
 	mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
-		return
+		return err
 	}
 	mcsFileJson, _ := json.Marshal(mcsOssFile)
 	logs.GetLogger().Printf("Job submitted to IPFS %s", string(mcsFileJson))
@@ -113,9 +116,10 @@ func submitJob(jobData *models.JobData) {
 	gatewayUrl, err := storageService.GetGatewayUrl()
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
-		return
+		return err
 	}
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
+	return nil
 }
 
 func RedeployJob(c *gin.Context) {
@@ -176,7 +180,11 @@ func RedeployJob(c *gin.Context) {
 	}()
 
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
-	submitJob(&jobData)
+	if err = submitJob(&jobData); err != nil {
+		jobData.JobResultURI = ""
+	} else {
+		updateJobStatus(jobData.UUID, models.JobUploadResult)
+	}
 	c.JSON(http.StatusOK, jobData)
 }
 

@@ -97,3 +97,10 @@ type Specification struct {
 	Quantity int64
 	Unit     string
 }
+
+type CacheSpaceDetail struct {
+	WalletAddress string
+	SpaceName     string
+	SpaceUuid     string
+	ExpireTime    int64
+}

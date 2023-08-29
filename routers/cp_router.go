@@ -11,6 +11,7 @@ func CPManager(router *gin.RouterGroup) {
 	router.POST("/lagrange/jobs", computing.ReceiveJob)
 	router.POST("/lagrange/jobs/redeploy", computing.RedeployJob)
 	router.DELETE("/lagrange/jobs", computing.DeleteJob)
-	router.GET("/cp", computing.StatisticalSources)
+	router.GET("/lagrange/cp", computing.StatisticalSources)
 	router.POST("/lagrange/jobs/renew", computing.ReNewJob)
+	router.GET("/lagrange/jobs/logs", computing.GetSpaceLog)
 }

@@ -315,7 +315,7 @@ func GetSpaceLog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 
-	go handleConnection(conn, spaceDetail, logType)
+	handleConnection(conn, spaceDetail, logType)
 
 }
 

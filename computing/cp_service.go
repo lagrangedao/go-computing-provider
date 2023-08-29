@@ -340,14 +340,21 @@ func GetSpaceLog(c *gin.Context) {
 			}
 			defer podLogs.Close()
 
-			buf := make([]byte, 1024)
+			reader := bufio.NewReader(podLogs)
 			for {
-				n, err := podLogs.Read(buf)
+				line, err := reader.ReadString('\n')
 				if err != nil {
+					if err == io.EOF {
+						// End of log stream
+						break
+					}
+					fmt.Printf("Error reading log: %v\n", err)
 					return
 				}
-				err = conn.WriteMessage(websocket.TextMessage, buf[:n])
+
+				err = conn.WriteMessage(websocket.TextMessage, []byte(line))
 				if err != nil {
+					fmt.Printf("Error sending log to WebSocket: %v\n", err)
 					return
 				}
 			}

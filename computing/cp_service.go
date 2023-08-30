@@ -73,8 +73,14 @@ func ReceiveJob(c *gin.Context) {
 	if err = submitJob(&jobData); err != nil {
 		jobData.JobResultURI = ""
 	} else {
-		updateJobStatus(jobData.UUID, models.JobUploadResult)
+		multiAddressSplit := strings.Split(conf.GetConfig().API.MultiAddress, "/")
+		jobSourceUri := jobData.JobSourceURI
+		spaceUuid := jobSourceUri[strings.LastIndex(jobSourceUri, "/")+1:]
+		wsUrl := fmt.Sprintf("ws://%s:%s/api/v1/computing/lagrange/spaces/log?space_id=%s", multiAddressSplit[2], multiAddressSplit[4], spaceUuid)
+		jobData.BuildLog = wsUrl + "&type=build"
+		jobData.ContainerLog = wsUrl + "&type=container"
 	}
+	updateJobStatus(jobData.UUID, models.JobUploadResult)
 	c.JSON(http.StatusOK, jobData)
 }
 

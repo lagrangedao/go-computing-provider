@@ -32,6 +32,8 @@ type JobData struct {
 	TaskUUID      string `json:"task_uuid"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+	BuildLog      string `json:"build_log"`
+	ContainerLog  string `json:"container_log"`
 }
 
 type Job struct {

@@ -19,6 +19,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -288,20 +289,6 @@ func StatisticalSources(c *gin.Context) {
 }
 
 func GetSpaceLog(c *gin.Context) {
-	var wsUpgrade = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-	conn, err := wsUpgrade.Upgrade(c.Writer, c.Request, nil)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed to set websocket upgrade: %+v", err)
-		return
-	}
-	defer conn.Close()
-
 	spaceUuid := c.Query("space_id")
 	logType := c.Query("type")
 	if strings.TrimSpace(spaceUuid) == "" {
@@ -322,36 +309,24 @@ func GetSpaceLog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 
+	conn, err := upgrade.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Println("Error upgrading connection:", err)
+		return
+	}
+	defer conn.Close()
 	handleConnection(conn, spaceDetail, logType)
 }
 
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
-	var isClose bool
-	conn.SetCloseHandler(func(closeCode int, text string) error {
-		isClose = true
-		logs.GetLogger().Infof("connection colsed, space_uuid: %s", spaceDetail.SpaceUuid)
-		conn.Close()
-		return nil
-	})
+	client := NewWsClient(conn)
 
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
-		buildLog, err := os.Open(buildLogPath)
-		if err != nil {
-			logs.GetLogger().Errorf("Failed to open build log file: %+v", err)
+		if _, err := os.Stat(buildLogPath); err != nil {
 			return
 		}
-		defer buildLog.Close()
-
-		scanner := bufio.NewScanner(buildLog)
-		for scanner.Scan() {
-			err := conn.WriteMessage(websocket.TextMessage, scanner.Bytes())
-			if err != nil {
-				logs.GetLogger().Errorf("Failed to send build log: %+v", err)
-				return
-			}
-		}
-
+		client.HandleBuildLog(buildLogPath)
 	} else if logType == "container" {
 		k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
 
@@ -377,26 +352,44 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 				return
 			}
 			defer podLogs.Close()
-
 			reader := bufio.NewReader(podLogs)
-			for {
-				if isClose {
-					break
-				}
-				line, err := reader.ReadString('\n')
-				if err != nil {
-					if err == io.EOF {
-						break
+
+			client.ReadMessage()
+			client.writeMessage()
+			go func() {
+				ticker := time.NewTicker(3 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						client.message <- wsMessage{
+							data:    []byte(PingMsg),
+							msgType: websocket.TextMessage,
+						}
+					case <-client.stopCh:
+						return
 					}
-					logs.GetLogger().Errorf("Error reading log: %v", err)
-					return
 				}
-
-				if err = conn.WriteMessage(websocket.TextMessage, []byte(line)); err != nil {
-					logs.GetLogger().Errorf("Error sending log to WebSocket: %v", err)
+			}()
+		loop:
+			for {
+				select {
+				case <-client.stopCh:
 					return
+				default:
+					line, err := reader.ReadString('\n')
+					if err != nil {
+						if err == io.EOF {
+							break loop
+						}
+						logs.GetLogger().Errorf("Error reading log: %v", err)
+						return
+					}
+					client.message <- wsMessage{
+						data:    []byte(line),
+						msgType: websocket.TextMessage,
+					}
 				}
-
 			}
 		}
 	}

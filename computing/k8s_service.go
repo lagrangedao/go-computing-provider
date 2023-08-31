@@ -314,10 +314,9 @@ func (s *K8sService) StatisticalSources(ctx context.Context) ([]*models.NodeReso
 			var gpuInfo struct {
 				Gpu models.Gpu `json:"gpu"`
 			}
-			err := json.Unmarshal([]byte(gpu.String()), &gpuInfo)
-			if err != nil {
-				logs.GetLogger().Error(err)
-				return nil, err
+			if err := json.Unmarshal([]byte(gpu.String()), &gpuInfo); err != nil {
+				logs.GetLogger().Error("nodeName: %s, error: %+v", node.Name, err)
+				continue
 			}
 
 			for index, gpuDetail := range gpuInfo.Gpu.Details {

@@ -1,7 +1,6 @@
 package computing
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -326,7 +325,11 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 		if _, err := os.Stat(buildLogPath); err != nil {
 			return
 		}
-		client.HandleBuildLog(buildLogPath)
+		logFile, _ := os.Open(buildLogPath)
+		defer logFile.Close()
+
+		client.HandleLogs(logFile)
+
 	} else if logType == "container" {
 		k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(spaceDetail.WalletAddress)
 
@@ -352,45 +355,8 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 				return
 			}
 			defer podLogs.Close()
-			reader := bufio.NewReader(podLogs)
 
-			client.ReadMessage()
-			client.writeMessage()
-			go func() {
-				ticker := time.NewTicker(3 * time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-ticker.C:
-						client.message <- wsMessage{
-							data:    []byte(PingMsg),
-							msgType: websocket.TextMessage,
-						}
-					case <-client.stopCh:
-						return
-					}
-				}
-			}()
-		loop:
-			for {
-				select {
-				case <-client.stopCh:
-					return
-				default:
-					line, err := reader.ReadString('\n')
-					if err != nil {
-						if err == io.EOF {
-							break loop
-						}
-						logs.GetLogger().Errorf("Error reading log: %v", err)
-						return
-					}
-					client.message <- wsMessage{
-						data:    []byte(line),
-						msgType: websocket.TextMessage,
-					}
-				}
-			}
+			client.HandleLogs(podLogs)
 		}
 	}
 }

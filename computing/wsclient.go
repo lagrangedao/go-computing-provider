@@ -3,14 +3,14 @@ package computing
 import (
 	"bufio"
 	"github.com/gorilla/websocket"
-	"log"
+	"io"
 	"net/http"
-	"os"
 	"time"
 )
 
 const (
-	PingMsg = "ping"
+	PingMsg    = "ping"
+	PingPeriod = 3 * time.Second
 )
 
 var upgrade = websocket.Upgrader{
@@ -42,7 +42,7 @@ func NewWsClient(client *websocket.Conn) *WsClient {
 	}
 
 	client.SetCloseHandler(func(code int, text string) error {
-		log.Println(code, "user client send close event")
+		//println("websocket: user client send close event")
 		wsClient.Close()
 		return nil
 	})
@@ -51,20 +51,16 @@ func NewWsClient(client *websocket.Conn) *WsClient {
 }
 
 func (ws *WsClient) Close() {
-	defer func() {
-		if ws.client != nil {
-			ws.client.Close()
-		}
-	}()
 	close(ws.stopCh)
+	close(ws.message)
 }
 
-func (ws *WsClient) HandleBuildLog(logFilePath string) {
-	ws.ReadMessage()
+func (ws *WsClient) HandleLogs(reader io.Reader) {
+	ws.readMessage()
 	ws.writeMessage()
 
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(PingPeriod)
 		defer ticker.Stop()
 		for {
 			select {
@@ -79,14 +75,7 @@ func (ws *WsClient) HandleBuildLog(logFilePath string) {
 		}
 	}()
 
-	buildLog, err := os.Open(logFilePath)
-	if err != nil {
-		log.Println("Failed to open build log file,", err)
-		return
-	}
-	defer buildLog.Close()
-
-	scanner := bufio.NewScanner(buildLog)
+	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		select {
 		case <-ws.stopCh:
@@ -107,11 +96,10 @@ func (ws *WsClient) writeMessage() {
 			select {
 			case msg := <-ws.message:
 				if err := ws.client.WriteMessage(msg.msgType, msg.data); err != nil {
-					log.Println("WriteMessage: ", err)
 					return
 				}
 				if string(msg.data) == PingMsg {
-					ws.client.SetReadDeadline(time.Now().Add(2 * time.Second))
+					_ = ws.client.SetReadDeadline(time.Now().Add(2*PingPeriod + time.Second))
 				}
 			case <-ws.stopCh:
 				return
@@ -120,18 +108,24 @@ func (ws *WsClient) writeMessage() {
 	}()
 }
 
-func (ws *WsClient) ReadMessage() {
+func (ws *WsClient) readMessage() {
 	go func() {
 		for {
-			if _, _, err := ws.client.ReadMessage(); err != nil {
-				if ws.checkFailedCount > 30 {
-					ws.Close()
-					break
+			select {
+			case <-ws.stopCh:
+				return
+			default:
+				if _, _, err := ws.client.ReadMessage(); err != nil {
+					if ws.checkFailedCount > 10 {
+						ws.Close()
+						break
+					}
+					ws.checkFailedCount++
+					time.Sleep(100 * time.Millisecond)
 				}
-				ws.checkFailedCount++
-				time.Sleep(600 * time.Millisecond)
-			} else {
-				ws.checkFailedCount = 0
+				if ws.checkFailedCount != 0 {
+					ws.checkFailedCount = 0
+				}
 			}
 		}
 	}()

@@ -101,6 +101,7 @@ func RunSyncTask() {
 			return
 		}
 
+		logs.GetLogger().Infof("collect all node: %d", len(nodes.Items))
 		for _, node := range nodes.Items {
 			cpNode := node
 			if gpu, ok := nodeGpuInfoMap[cpNode.Name]; ok {

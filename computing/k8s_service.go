@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/retry"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -429,30 +430,29 @@ func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 	return nil
 }
 
-func (s *K8sService) WaitForPodRunning(namespace, spaceUuid string) (string, error) {
+func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, hostname string) (string, error) {
 	var podName string
 	var podErr = errors.New("get pod status failed")
+	var count = 0
 
 	retryErr := retry.OnError(wait.Backoff{
-		Steps:    100,
+		Steps:    120,
 		Duration: 10 * time.Second,
 	}, func(err error) bool {
 		return err != nil && err.Error() == podErr.Error()
 	}, func() error {
-		podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
-			LabelSelector: fmt.Sprintf("lad_app==%s", spaceUuid),
-		})
-		if err != nil {
-			logs.GetLogger().Error(err)
-			return podErr
-		}
-		for _, pod := range podList.Items {
-			if pod.Status.Phase != coreV1.PodRunning {
-				return err
+		if count <= 1 {
+			podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
+				LabelSelector: fmt.Sprintf("lad_app==%s", spaceUuid),
+			})
+			if err != nil {
+				logs.GetLogger().Error(err)
+				return podErr
 			}
-			podName = pod.Name
+			podName = podList.Items[0].Name
 		}
-		return nil
+		_, err := http.Get(hostname)
+		return err
 	})
 
 	if retryErr != nil {

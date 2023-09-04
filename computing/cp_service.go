@@ -660,7 +660,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, har
 
 		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
 			for _, res := range cr.ModelSetting.Resources {
-				downloadModelUrl(k8sNameSpace, spaceUuid, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+				downloadModelUrl(k8sNameSpace, spaceUuid, hostName, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
 			}
 		}
 
@@ -834,10 +834,10 @@ func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) 
 	}()
 }
 
-func downloadModelUrl(namespace, spaceUuid string, podCmd []string) {
+func downloadModelUrl(namespace, spaceUuid, hostname string, podCmd []string) {
 	go func() {
 		k8sService := NewK8sService()
-		podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid)
+		podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid, hostname)
 		if err != nil {
 			logs.GetLogger().Error(err)
 			return

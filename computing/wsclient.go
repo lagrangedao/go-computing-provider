@@ -139,7 +139,7 @@ func (ws *WsClient) readMessage() {
 						break
 					}
 					ws.checkFailedCount++
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(300 * time.Millisecond)
 				}
 				if ws.checkFailedCount != 0 {
 					ws.checkFailedCount = 0

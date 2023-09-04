@@ -1,6 +1,7 @@
 package computing
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -8,11 +9,13 @@ import (
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/models"
 	"io"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/retry"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
@@ -28,16 +31,19 @@ import (
 
 var clientSet *kubernetes.Clientset
 var k8sOnce sync.Once
+var config *rest.Config
+var version string
 
 type K8sService struct {
 	k8sClient *kubernetes.Clientset
 	Version   string
+	config    *rest.Config
 }
 
 func NewK8sService() *K8sService {
-	var version string
+	var err error
 	k8sOnce.Do(func() {
-		config, err := rest.InClusterConfig()
+		config, err = rest.InClusterConfig()
 		if err != nil {
 			var kubeConfig *string
 			if home := homedir.HomeDir(); home != "" {
@@ -69,6 +75,7 @@ func NewK8sService() *K8sService {
 	return &K8sService{
 		k8sClient: clientSet,
 		Version:   version,
+		config:    config,
 	}
 }
 
@@ -420,6 +427,44 @@ func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 	return nil
 }
 
+func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podCmd []string) error {
+	//command := []string{"wget", "https://civitai.com/api/download/models/116843", "-O", "/stable-diffusion-webui/models/Lora/azuki2.9.safetensors"}
+
+	req := s.k8sClient.CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&coreV1.PodExecOptions{
+			Container: containerName,
+			Command:   podCmd,
+			Stdin:     true,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       true,
+		}, scheme.ParameterCodec)
+
+	oneHourCtx, cancelFn := context.WithTimeout(context.TODO(), time.Hour)
+	defer cancelFn()
+	respStream, err := req.Stream(oneHourCtx)
+	if err != nil {
+		return fmt.Errorf("failed to connect to the Pod: %w", err)
+	}
+	defer respStream.Close()
+
+	scanner := bufio.NewScanner(respStream)
+	for scanner.Scan() {
+		select {
+		case <-oneHourCtx.Done():
+			return nil
+		default:
+			fmt.Println(string(scanner.Bytes()))
+		}
+	}
+	return nil
+}
+
 func readLog(req *rest.Request) (*strings.Builder, error) {
 	podLogs, err := req.Stream(context.TODO())
 	if err != nil {
@@ -443,60 +488,6 @@ func generateLabel(name string) map[string]string {
 	} else {
 		return map[string]string{}
 	}
-}
-
-func IsKubernetesVersionGreaterThan(version string, targetVersion string) bool {
-	v1, err := parseKubernetesVersion(version)
-	if err != nil {
-		return false
-	}
-
-	v2, err := parseKubernetesVersion(targetVersion)
-	if err != nil {
-		return false
-	}
-
-	if v1.major > v2.major {
-		return true
-	} else if v1.major == v2.major && v1.minor > v2.minor {
-		return true
-	} else if v1.major == v2.major && v1.minor == v2.minor && v1.patch > v2.patch {
-		return true
-	}
-
-	return false
-}
-
-type kubernetesVersion struct {
-	major int
-	minor int
-	patch int
-}
-
-func parseKubernetesVersion(version string) (*kubernetesVersion, error) {
-	v := &kubernetesVersion{}
-
-	parts := strings.Split(strings.ReplaceAll(version, "v", ""), ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid version format")
-	}
-
-	_, err := fmt.Sscanf(parts[0], "%d", &v.major)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse major version")
-	}
-
-	_, err = fmt.Sscanf(parts[1], "%d", &v.minor)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse minor version")
-	}
-
-	_, err = fmt.Sscanf(parts[2], "%d", &v.patch)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse patch version")
-	}
-
-	return v, nil
 }
 
 type collectGpuInfo struct {

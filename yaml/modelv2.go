@@ -165,7 +165,14 @@ type Service struct {
 		Name string `yaml:"name"`
 		Path string `yaml:"path"`
 	} `yaml:"config"`
-	ReadyCmd []string `yaml:"ready-cmd"`
+	ReadyCmd     []string `yaml:"ready-cmd"`
+	ModelSetting struct {
+		TargetDir string `json:"target-dir"`
+		Resources []struct {
+			Name string `json:"name"`
+			Url  string `json:"url"`
+		} `json:"resources"`
+	} `json:"model-setting"`
 }
 
 type Expose struct {

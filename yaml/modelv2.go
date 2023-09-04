@@ -124,6 +124,7 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 					Path: service.Config.Path,
 				}
 			}
+			containerNew.ModelSetting = service.ModelSetting
 		}
 
 		containerNew.ResourceLimit = make(corev1.ResourceList)

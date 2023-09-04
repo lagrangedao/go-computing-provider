@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/models"
 	"io"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/retry"
 	"os"
@@ -427,9 +429,42 @@ func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 	return nil
 }
 
+func (s *K8sService) WaitForPodRunning(namespace, spaceUuid string) (string, error) {
+	var podName string
+	var podErr = errors.New("get pod status failed")
+
+	retryErr := retry.OnError(wait.Backoff{
+		Steps:    100,
+		Duration: 10 * time.Second,
+	}, func(err error) bool {
+		return err != nil && err.Error() == podErr.Error()
+	}, func() error {
+		podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
+			LabelSelector: fmt.Sprintf("lad_app==%s", spaceUuid),
+		})
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return podErr
+		}
+		for _, pod := range podList.Items {
+			if pod.Status.Phase != coreV1.PodRunning {
+				return err
+			}
+			podName = pod.Name
+		}
+		return nil
+	})
+
+	if retryErr != nil {
+		return podName, fmt.Errorf("failed waiting for pods to be running: %v", retryErr)
+	}
+	return podName, nil
+}
+
 func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podCmd []string) error {
 	//command := []string{"wget", "https://civitai.com/api/download/models/116843", "-O", "/stable-diffusion-webui/models/Lora/azuki2.9.safetensors"}
 
+	logs.GetLogger().Infof("namespace: %s, podName: %s, podCmd: %+v", namespace, podName, podCmd)
 	req := s.k8sClient.CoreV1().RESTClient().
 		Post().
 		Resource("pods").

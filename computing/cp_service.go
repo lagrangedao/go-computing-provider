@@ -658,6 +658,12 @@ func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, har
 			return
 		}
 
+		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
+			for _, res := range cr.ModelSetting.Resources {
+				downloadModelUrl(k8sNameSpace, spaceUuid, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+			}
+		}
+
 		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
@@ -824,6 +830,22 @@ func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) 
 			case error:
 				return
 			}
+		}
+	}()
+}
+
+func downloadModelUrl(namespace, spaceUuid string, podCmd []string) {
+	go func() {
+		k8sService := NewK8sService()
+		podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid)
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+
+		if err = k8sService.PodDoCommand(namespace, podName, "", podCmd); err != nil {
+			logs.GetLogger().Error(err)
+			return
 		}
 	}()
 }

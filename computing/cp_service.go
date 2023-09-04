@@ -835,19 +835,17 @@ func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) 
 }
 
 func downloadModelUrl(namespace, spaceUuid, hostname string, podCmd []string) {
-	go func() {
-		k8sService := NewK8sService()
-		podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid, hostname)
-		if err != nil {
-			logs.GetLogger().Error(err)
-			return
-		}
+	k8sService := NewK8sService()
+	podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid, hostname)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
 
-		if err = k8sService.PodDoCommand(namespace, podName, "", podCmd); err != nil {
-			logs.GetLogger().Error(err)
-			return
-		}
-	}()
+	if err = k8sService.PodDoCommand(namespace, podName, "", podCmd); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
 }
 
 func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {

@@ -21,12 +21,9 @@ type ContainerResource struct {
 	ReadyCmd      []string
 	GpuModel      string
 	ModelSetting  struct {
-		TargetDir string `json:"target-dir"`
-		Resources []struct {
-			Name string `json:"name"`
-			Url  string `json:"url"`
-		} `json:"resources"`
-	} `json:"model-setting"`
+		TargetDir string
+		Resources []ModelResource
+	}
 }
 
 type ConfigFile struct {

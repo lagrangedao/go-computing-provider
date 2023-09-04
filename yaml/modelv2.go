@@ -124,7 +124,8 @@ func (dy *DeployYamlV2) ServiceToK8sResource() ([]ContainerResource, error) {
 					Path: service.Config.Path,
 				}
 			}
-			containerNew.ModelSetting = service.ModelSetting
+			containerNew.ModelSetting.TargetDir = service.ModelSetting.TargetDir
+			containerNew.ModelSetting.Resources = service.ModelSetting.Resources
 		}
 
 		containerNew.ResourceLimit = make(corev1.ResourceList)
@@ -168,12 +169,9 @@ type Service struct {
 	} `yaml:"config"`
 	ReadyCmd     []string `yaml:"ready-cmd"`
 	ModelSetting struct {
-		TargetDir string `json:"target-dir"`
-		Resources []struct {
-			Name string `json:"name"`
-			Url  string `json:"url"`
-		} `json:"resources"`
-	} `json:"model-setting"`
+		TargetDir string          `yaml:"target-dir"`
+		Resources []ModelResource `yaml:"resources"`
+	} `yaml:"model-setting"`
 }
 
 type Expose struct {
@@ -230,4 +228,9 @@ func getProtocol(proto string) corev1.Protocol {
 		result = corev1.ProtocolTCP
 	}
 	return result
+}
+
+type ModelResource struct {
+	Name string `yaml:"name"`
+	Url  string `yaml:"url"`
 }

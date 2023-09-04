@@ -433,7 +433,6 @@ func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, hostname string) (string, error) {
 	var podName string
 	var podErr = errors.New("get pod status failed")
-	var count = 0
 
 	retryErr := retry.OnError(wait.Backoff{
 		Steps:    120,
@@ -441,19 +440,18 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, hostname string) (s
 	}, func(err error) bool {
 		return err != nil && err.Error() == podErr.Error()
 	}, func() error {
-		if count <= 1 {
-			podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
-				LabelSelector: fmt.Sprintf("lad_app==%s", spaceUuid),
-			})
-			if err != nil {
-				logs.GetLogger().Error(err)
-				return podErr
-			}
-			podName = podList.Items[0].Name
-		}
 		if _, err := http.Get(hostname); err != nil {
 			return podErr
 		}
+		podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
+			LabelSelector: fmt.Sprintf("lad_app==%s", spaceUuid),
+		})
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return podErr
+		}
+		podName = podList.Items[0].Name
+
 		return nil
 	})
 

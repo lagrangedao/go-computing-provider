@@ -658,12 +658,6 @@ func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, har
 			return
 		}
 
-		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
-			for _, res := range cr.ModelSetting.Resources {
-				downloadModelUrl(k8sNameSpace, spaceUuid, hostName, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
-			}
-		}
-
 		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
@@ -672,6 +666,14 @@ func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, har
 			return
 		}
 		updateJobStatus(jobUuid, models.JobDeployToK8s)
+
+		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
+			for _, res := range cr.ModelSetting.Resources {
+				go func(res yaml.ModelResource) {
+					downloadModelUrl(k8sNameSpace, spaceUuid, hostName, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+				}(res)
+			}
+		}
 
 		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceUuid, int64(duration))
 	}

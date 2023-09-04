@@ -426,6 +426,8 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		}
 	}
 
+	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
+	os.RemoveAll(spacePath)
 	updateJobStatus(jobUuid, models.JobDownloadSource)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
@@ -486,9 +488,6 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 		logs.GetLogger().Errorf("Failed delete pods, spaceUuid: %s, error: %+v", spaceUuid, err)
 		return
 	}
-
-	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
-	os.RemoveAll(spacePath)
 
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()

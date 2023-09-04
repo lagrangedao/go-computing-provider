@@ -451,8 +451,10 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, hostname string) (s
 			}
 			podName = podList.Items[0].Name
 		}
-		_, err := http.Get(hostname)
-		return err
+		if _, err := http.Get(hostname); err != nil {
+			return podErr
+		}
+		return nil
 	})
 
 	if retryErr != nil {

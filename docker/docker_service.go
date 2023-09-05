@@ -26,6 +26,8 @@ import (
 	"github.com/docker/docker/client"
 )
 
+const BuildFileName = "build.log"
+
 type DockerService struct {
 	c *client.Client
 }
@@ -207,7 +209,21 @@ func (ds *DockerService) BuildImage(buildPath, imageName string) error {
 		return err
 	}
 	defer buildResponse.Body.Close()
-	return printOut(buildResponse.Body)
+
+	logFile, err := os.Create(filepath.Join(buildPath, BuildFileName))
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+
+	logWriters := []io.Writer{logFile, os.Stdout}
+	multiWriter := io.MultiWriter(logWriters...)
+
+	_, err = io.Copy(multiWriter, buildResponse.Body)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type ErrorLine struct {

@@ -430,7 +430,7 @@ func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 	return nil
 }
 
-func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, hostname string) (string, error) {
+func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, serviceIp string) (string, error) {
 	var podName string
 	var podErr = errors.New("get pod status failed")
 
@@ -440,8 +440,8 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, hostname string) (s
 	}, func(err error) bool {
 		return err != nil && err.Error() == podErr.Error()
 	}, func() error {
-		if _, err := http.Get("http://" + hostname); err != nil {
-			logs.GetLogger().Errorf("hostname: %+v", err)
+		if _, err := http.Get(serviceIp); err != nil {
+			logs.GetLogger().Errorf("service not ready : %+v", err)
 			return podErr
 		}
 		podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{

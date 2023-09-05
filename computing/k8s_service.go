@@ -462,8 +462,6 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, serviceIp string) (
 }
 
 func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podCmd []string) error {
-	logs.GetLogger().Infof("namespace: %s, podName: %s, podCmd: %+v", namespace, podName, podCmd)
-
 	reader, writer := io.Pipe()
 	req := s.k8sClient.CoreV1().RESTClient().
 		Post().

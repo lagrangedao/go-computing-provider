@@ -1,7 +1,6 @@
 package computing
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -442,7 +441,6 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, serviceIp string) (
 		return err != nil && err.Error() == podErr.Error()
 	}, func() error {
 		if _, err := http.Get(serviceIp); err != nil {
-			logs.GetLogger().Errorf("service not ready : %+v", err)
 			return podErr
 		}
 		podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
@@ -467,7 +465,6 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 	logs.GetLogger().Infof("namespace: %s, podName: %s, podCmd: %+v", namespace, podName, podCmd)
 
 	reader, writer := io.Pipe()
-
 	req := s.k8sClient.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -496,12 +493,6 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create stream: %w", err)
-	}
-
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Println(line)
 	}
 
 	return nil

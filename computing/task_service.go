@@ -100,6 +100,7 @@ func RunSyncTask() {
 			return
 		}
 
+		logs.GetLogger().Infof("collect all node: %d", len(nodes.Items))
 		for _, node := range nodes.Items {
 			cpNode := node
 			if gpu, ok := nodeGpuInfoMap[cpNode.Name]; ok {
@@ -107,12 +108,13 @@ func RunSyncTask() {
 					Gpu models.Gpu `json:"gpu"`
 				}
 				if err = json.Unmarshal([]byte(gpu.String()), &gpuInfo); err != nil {
-					logs.GetLogger().Error(err)
-					return
+					logs.GetLogger().Errorf("convert to json, nodeName %s, error: %+v", cpNode.Name, err)
+					continue
 				}
 				for _, detail := range gpuInfo.Gpu.Details {
 					if err = k8sService.AddNodeLabel(cpNode.Name, detail.ProductName); err != nil {
-						logs.GetLogger().Error(err)
+						logs.GetLogger().Errorf("add node label, nodeName %s, gpuName: %s, error: %+v", cpNode.Name, detail.ProductName, err)
+						continue
 					}
 				}
 			}

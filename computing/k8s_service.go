@@ -1,6 +1,7 @@
 package computing
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -464,6 +465,9 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, serviceIp string) (
 
 func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podCmd []string) error {
 	logs.GetLogger().Infof("namespace: %s, podName: %s, podCmd: %+v", namespace, podName, podCmd)
+
+	reader, writer := io.Pipe()
+
 	req := s.k8sClient.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
@@ -476,7 +480,7 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
-			TTY:       true,
+			TTY:       false,
 		}, scheme.ParameterCodec)
 
 	executor, err := remotecommand.NewSPDYExecutor(s.config, "POST", req.URL())
@@ -485,15 +489,21 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 	}
 
 	err = executor.Stream(remotecommand.StreamOptions{
-		Stdin:  nil,
-		Stdout: os.Stdout,
-		Stderr: os.Stdout,
+		Stdin:  reader,
+		Stdout: writer,
+		Stderr: writer,
 		Tty:    true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create stream: %w", err)
 	}
-	time.Sleep(5 * time.Minute)
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Println(line)
+	}
+
 	return nil
 }
 

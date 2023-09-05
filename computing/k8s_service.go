@@ -487,12 +487,13 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 	err = executor.Stream(remotecommand.StreamOptions{
 		Stdin:  nil,
 		Stdout: os.Stdout,
-		Stderr: os.Stderr,
-		Tty:    false,
+		Stderr: os.Stdout,
+		Tty:    true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create stream: %w", err)
 	}
+	time.Sleep(5 * time.Minute)
 	return nil
 }
 

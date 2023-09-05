@@ -671,7 +671,7 @@ func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, har
 		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
 			for _, res := range cr.ModelSetting.Resources {
 				go func(res yaml.ModelResource) {
-					downloadModelUrl(k8sNameSpace, spaceUuid, serviceIp, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+					downloadModelUrl(k8sNameSpace, spaceUuid, serviceIp, []string{"bash", "-c", "wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
 				}(res)
 			}
 		}

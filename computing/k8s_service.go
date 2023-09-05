@@ -492,7 +492,7 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 		Stdin:  reader,
 		Stdout: writer,
 		Stderr: writer,
-		Tty:    true,
+		Tty:    false,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create stream: %w", err)

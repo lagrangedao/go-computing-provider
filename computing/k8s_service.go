@@ -470,6 +470,8 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 		Post().
 		Resource("pods").
 		Name(podName).
+		SetHeader("Upgrade", "websocket").
+		SetHeader("Connection", "Upgrade").
 		Namespace(namespace).
 		SubResource("exec").
 		VersionedParams(&coreV1.PodExecOptions{

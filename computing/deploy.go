@@ -128,7 +128,7 @@ func (d *Deploy) DockerfileToK8s() {
 	updateJobStatus(d.jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-	if err := d.deployK8sResource(int32(containerPort)); err != nil {
+	if _, err := d.deployK8sResource(int32(containerPort)); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
@@ -281,11 +281,21 @@ func (d *Deploy) YamlToK8s() {
 		updateJobStatus(d.jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-		if err := d.deployK8sResource(cr.Ports[0].ContainerPort); err != nil {
+		serviceHost, err := d.deployK8sResource(cr.Ports[0].ContainerPort)
+		if err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
 		updateJobStatus(d.jobUuid, models.JobDeployToK8s)
+
+		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
+			for _, res := range cr.ModelSetting.Resources {
+				go func(res yaml.ModelResource) {
+					downloadModelUrl(d.k8sNameSpace, d.spaceUuid, serviceHost, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+				}(res)
+			}
+		}
+
 		d.watchContainerRunningTime()
 	}
 }
@@ -372,21 +382,23 @@ func (d *Deploy) createResources() coreV1.ResourceRequirements {
 	}
 }
 
-func (d *Deploy) deployK8sResource(containerPort int32) error {
+func (d *Deploy) deployK8sResource(containerPort int32) (string, error) {
 	k8sService := NewK8sService()
 
 	createService, err := k8sService.CreateService(context.TODO(), d.k8sNameSpace, d.spaceUuid, containerPort)
 	if err != nil {
-		return fmt.Errorf("failed creata service, error: %w", err)
+		return "", fmt.Errorf("failed creata service, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
+	serviceHost := fmt.Sprintf("http://%s:%d", createService.Spec.ClusterIP, createService.Spec.Ports[0].Port)
+
 	createIngress, err := k8sService.CreateIngress(context.TODO(), d.k8sNameSpace, d.spaceUuid, d.hostName, containerPort)
 	if err != nil {
-		return fmt.Errorf("failed creata ingress, error: %w", err)
+		return "", fmt.Errorf("failed creata ingress, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
-	return nil
+	return serviceHost, nil
 }
 
 func (d *Deploy) watchContainerRunningTime() {

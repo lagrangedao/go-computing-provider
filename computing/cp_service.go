@@ -444,6 +444,366 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	return hostName
 }
 
+func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceUuid, imageName, dockerfilePath string, hardwareResource models.Resource, duration int) {
+	exposedPort, err := docker.ExtractExposedPort(dockerfilePath)
+	if err != nil {
+		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
+		return
+	}
+	containerPort, err := strconv.ParseInt(exposedPort, 10, 64)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed to convert exposed port: %v", err)
+		return
+	}
+
+	// first delete old resource
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
+	deleteJob(k8sNameSpace, spaceUuid)
+
+	if err := deployNamespace(creatorWallet); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Errorf("get memory failed, error: %+v", err)
+		return
+	}
+
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Storage.Quantity, hardwareResource.Storage.Unit))
+	if err != nil {
+		logs.GetLogger().Errorf("get storage failed, error: %+v", err)
+		return
+	}
+
+	// create deployment
+	k8sService := NewK8sService()
+	deployment := &appV1.Deployment{
+		TypeMeta: metaV1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid,
+			Namespace: k8sNameSpace,
+		},
+		Spec: appV1.DeploymentSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"lad_app": spaceUuid},
+			},
+
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels:    map[string]string{"lad_app": spaceUuid},
+					Namespace: k8sNameSpace,
+				},
+
+				Spec: coreV1.PodSpec{
+					NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
+					Containers: []coreV1.Container{{
+						Name:            constants.K8S_CONTAINER_NAME_PREFIX + spaceUuid,
+						Image:           imageName,
+						ImagePullPolicy: coreV1.PullIfNotPresent,
+						Ports: []coreV1.ContainerPort{{
+							ContainerPort: int32(containerPort),
+						}},
+						Env: []coreV1.EnvVar{
+							{
+								Name:  "wallet_address",
+								Value: creatorWallet,
+							},
+							{
+								Name:  "space_uuid",
+								Value: spaceUuid,
+							},
+							{
+								Name:  "result_url",
+								Value: hostName,
+							},
+							{
+								Name:  "job_uuid",
+								Value: jobUuid,
+							},
+						},
+						Resources: coreV1.ResourceRequirements{
+							Limits: coreV1.ResourceList{
+								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:           memQuantity,
+								coreV1.ResourceEphemeralStorage: storageQuantity,
+								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+							},
+							Requests: coreV1.ResourceList{
+								coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+								coreV1.ResourceMemory:           memQuantity,
+								coreV1.ResourceEphemeralStorage: storageQuantity,
+								"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+							},
+						},
+					}},
+				},
+			},
+		}}
+	createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, deployment)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	updateJobStatus(jobUuid, models.JobPullImage)
+	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+
+	if _, err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, containerPort); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+	updateJobStatus(jobUuid, models.JobDeployToK8s)
+
+	watchContainerRunningTime(jobUuid, k8sNameSpace, spaceUuid, int64(duration))
+	return
+}
+
+func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, hardwareResource models.Resource, duration int) {
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
+	deleteJob(k8sNameSpace, spaceUuid)
+
+	containerResources, err := yaml.HandlerYaml(yamlPath)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	if err := deployNamespace(creatorWallet); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	memQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Memory.Quantity, hardwareResource.Memory.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get memory failed, error: %+v", err)
+		return
+	}
+
+	storageQuantity, err := resource.ParseQuantity(fmt.Sprintf("%d%s", hardwareResource.Storage.Quantity, hardwareResource.Storage.Unit))
+	if err != nil {
+		logs.GetLogger().Error("get storage failed, error: %+v", err)
+		return
+	}
+
+	k8sService := NewK8sService()
+	for _, cr := range containerResources {
+		for i, envVar := range cr.Env {
+			if strings.Contains(envVar.Name, "NEXTAUTH_URL") {
+				cr.Env[i].Value = "https://" + hostName
+				break
+			}
+		}
+
+		var volumeMount []coreV1.VolumeMount
+		var volumes []coreV1.Volume
+		if cr.VolumeMounts.Path != "" {
+			fileNameWithoutExt := filepath.Base(cr.VolumeMounts.Name[:len(cr.VolumeMounts.Name)-len(filepath.Ext(cr.VolumeMounts.Name))])
+			configMap, err := k8sService.CreateConfigMap(context.TODO(), k8sNameSpace, spaceUuid, filepath.Dir(yamlPath), cr.VolumeMounts.Name)
+			if err != nil {
+				logs.GetLogger().Error(err)
+				return
+			}
+			configName := configMap.GetName()
+			volumes = []coreV1.Volume{
+				{
+					Name: spaceUuid + "-" + fileNameWithoutExt,
+					VolumeSource: coreV1.VolumeSource{
+						ConfigMap: &coreV1.ConfigMapVolumeSource{
+							LocalObjectReference: coreV1.LocalObjectReference{
+								Name: configName,
+							},
+						},
+					},
+				},
+			}
+			volumeMount = []coreV1.VolumeMount{
+				{
+					Name:      spaceUuid + "-" + fileNameWithoutExt,
+					MountPath: cr.VolumeMounts.Path,
+				},
+			}
+		}
+
+		var containers []coreV1.Container
+		for _, depend := range cr.Depends {
+			var handler = new(coreV1.ExecAction)
+			handler.Command = depend.ReadyCmd
+			containers = append(containers, coreV1.Container{
+				Name:            spaceUuid + "-" + depend.Name,
+				Image:           depend.ImageName,
+				Command:         depend.Command,
+				Args:            depend.Args,
+				Env:             depend.Env,
+				Ports:           depend.Ports,
+				ImagePullPolicy: coreV1.PullIfNotPresent,
+				Resources:       coreV1.ResourceRequirements{},
+				ReadinessProbe: &coreV1.Probe{
+					ProbeHandler: coreV1.ProbeHandler{
+						Exec: handler,
+					},
+					InitialDelaySeconds: 5,
+					PeriodSeconds:       5,
+				},
+			})
+		}
+
+		cr.Env = append(cr.Env, []coreV1.EnvVar{
+			{
+				Name:  "wallet_address",
+				Value: creatorWallet,
+			},
+			{
+				Name:  "space_uuid",
+				Value: spaceUuid,
+			},
+			{
+				Name:  "result_url",
+				Value: hostName,
+			},
+			{
+				Name:  "job_uuid",
+				Value: jobUuid,
+			},
+		}...)
+
+		containers = append(containers, coreV1.Container{
+			Name:            spaceUuid + "-" + cr.Name,
+			Image:           cr.ImageName,
+			Command:         cr.Command,
+			Args:            cr.Args,
+			Env:             cr.Env,
+			Ports:           cr.Ports,
+			ImagePullPolicy: coreV1.PullIfNotPresent,
+			Resources: coreV1.ResourceRequirements{
+				Limits: coreV1.ResourceList{
+					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+					coreV1.ResourceMemory:           memQuantity,
+					coreV1.ResourceEphemeralStorage: storageQuantity,
+					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+				},
+				Requests: coreV1.ResourceList{
+					coreV1.ResourceCPU:              *resource.NewQuantity(hardwareResource.Cpu.Quantity, resource.DecimalSI),
+					coreV1.ResourceMemory:           memQuantity,
+					coreV1.ResourceEphemeralStorage: storageQuantity,
+					"nvidia.com/gpu":                resource.MustParse(fmt.Sprintf("%d", hardwareResource.Gpu.Quantity)),
+				},
+			},
+			VolumeMounts: volumeMount,
+		})
+
+		deployment := &appV1.Deployment{
+			TypeMeta: metaV1.TypeMeta{
+				Kind:       "Deployment",
+				APIVersion: "apps/v1",
+			},
+			ObjectMeta: metaV1.ObjectMeta{
+				Name:      constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid,
+				Namespace: k8sNameSpace,
+			},
+
+			Spec: appV1.DeploymentSpec{
+				Selector: &metaV1.LabelSelector{
+					MatchLabels: map[string]string{"lad_app": spaceUuid},
+				},
+				Template: coreV1.PodTemplateSpec{
+					ObjectMeta: metaV1.ObjectMeta{
+						Labels:    map[string]string{"lad_app": spaceUuid},
+						Namespace: k8sNameSpace,
+					},
+					Spec: coreV1.PodSpec{
+						NodeSelector: generateLabel(hardwareResource.Gpu.Unit),
+						Containers:   containers,
+						Volumes:      volumes,
+					},
+				},
+			}}
+
+		createDeployment, err := k8sService.CreateDeployment(context.TODO(), k8sNameSpace, deployment)
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+
+		updateJobStatus(jobUuid, models.JobPullImage)
+		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+
+		serviceIp, err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, int64(cr.Ports[0].ContainerPort))
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return
+		}
+		updateJobStatus(jobUuid, models.JobDeployToK8s)
+
+		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
+			for _, res := range cr.ModelSetting.Resources {
+				go func(res yaml.ModelResource) {
+					downloadModelUrl(k8sNameSpace, spaceUuid, serviceIp, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+				}(res)
+			}
+		}
+
+		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceUuid, int64(duration))
+	}
+}
+
+func deployNamespace(creatorWallet string) error {
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + creatorWallet
+	k8sService := NewK8sService()
+	// create namespace
+	if _, err := k8sService.GetNameSpace(context.TODO(), k8sNameSpace, metaV1.GetOptions{}); err != nil {
+		if errors.IsNotFound(err) {
+			namespace := &coreV1.Namespace{
+				ObjectMeta: metaV1.ObjectMeta{
+					Name: k8sNameSpace,
+					Labels: map[string]string{
+						"lab-ns": creatorWallet,
+					},
+				},
+			}
+			createdNamespace, err := k8sService.CreateNameSpace(context.TODO(), namespace, metaV1.CreateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed create namespace, error: %w", err)
+			}
+			logs.GetLogger().Infof("create namespace successfully, namespace: %s", createdNamespace.Name)
+
+			//networkPolicy, err := k8sService.CreateNetworkPolicy(context.TODO(), k8sNameSpace)
+			//if err != nil {
+			//	return fmt.Errorf("failed create networkPolicy, error: %w", err)
+			//}
+			//logs.GetLogger().Infof("create networkPolicy successfully, networkPolicyName: %s", networkPolicy.Name)
+		} else {
+			return err
+		}
+	}
+	return nil
+}
+
+func deployK8sResource(k8sNameSpace, spaceUuid, hostName string, containerPort int64) (string, error) {
+	k8sService := NewK8sService()
+
+	// create service
+	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceUuid, int32(containerPort))
+	if err != nil {
+		return "", fmt.Errorf("failed creata service, error: %w", err)
+	}
+	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
+
+	serviceIp := fmt.Sprintf("http://%s:%d", createService.Spec.ClusterIP, createService.Spec.Ports[0].Port)
+
+	// create ingress
+	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceUuid, hostName, int32(containerPort))
+	if err != nil {
+		return "", fmt.Errorf("failed creata ingress, error: %w", err)
+	}
+	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
+	return serviceIp, nil
+}
+
 func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceUuid
@@ -507,6 +867,60 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 			logs.GetLogger().Infof("Deleted all resource finised. spaceUuid: %s", spaceUuid)
 			break
 		}
+	}
+}
+
+func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) {
+	conn := redisPool.Get()
+	_, err := conn.Do("SET", key, "wait-delete", "EX", runTime)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed set redis key and expire time, key: %s, error: %+v", key, err)
+		return
+	}
+
+	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + key}
+	fields := map[string]string{
+		"k8s_namespace": namespace,
+		"expire_time":   strconv.Itoa(int(time.Now().Unix() + runTime)),
+		"space_uuid":    spaceUuid,
+	}
+
+	for key, val := range fields {
+		fullArgs = append(fullArgs, key, val)
+	}
+	conn.Do("HSET", fullArgs...)
+
+	go func() {
+		psc := redis.PubSubConn{Conn: redisPool.Get()}
+		psc.PSubscribe("__keyevent@0__:expired")
+		for {
+			switch n := psc.Receive().(type) {
+			case redis.Message:
+				if n.Channel == "__keyevent@0__:expired" && string(n.Data) == key {
+					logs.GetLogger().Infof("The namespace: %s, spaceUuid: %s, job has reached its runtime and will stop running.", namespace, spaceUuid)
+					deleteJob(namespace, spaceUuid)
+					redisPool.Get().Do("DEL", constants.REDIS_FULL_PREFIX+key)
+				}
+			case redis.Subscription:
+				logs.GetLogger().Infof("Subscribe %s", n.Channel)
+			case error:
+				return
+			}
+		}
+	}()
+}
+
+func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
+	k8sService := NewK8sService()
+	podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid, serviceIp)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	if err = k8sService.PodDoCommand(namespace, podName, "", podCmd); err != nil {
+		logs.GetLogger().Error(err)
+		return
 	}
 }
 

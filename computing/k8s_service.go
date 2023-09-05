@@ -1,7 +1,6 @@
 package computing
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"io"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/retry"
 	"net/http"
 	"os"
@@ -463,15 +463,11 @@ func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, serviceIp string) (
 }
 
 func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podCmd []string) error {
-	//command := []string{"wget", "https://civitai.com/api/download/models/116843", "-O", "/stable-diffusion-webui/models/Lora/azuki2.9.safetensors"}
-
 	logs.GetLogger().Infof("namespace: %s, podName: %s, podCmd: %+v", namespace, podName, podCmd)
 	req := s.k8sClient.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
 		Name(podName).
-		SetHeader("Upgrade", "websocket").
-		SetHeader("Connection", "Upgrade").
 		Namespace(namespace).
 		SubResource("exec").
 		VersionedParams(&coreV1.PodExecOptions{
@@ -483,22 +479,19 @@ func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podC
 			TTY:       true,
 		}, scheme.ParameterCodec)
 
-	oneHourCtx, cancelFn := context.WithTimeout(context.TODO(), time.Hour)
-	defer cancelFn()
-	respStream, err := req.Stream(oneHourCtx)
+	executor, err := remotecommand.NewSPDYExecutor(s.config, "POST", req.URL())
 	if err != nil {
-		return fmt.Errorf("failed to connect to the Pod: %w", err)
+		return fmt.Errorf("failed to create spdy client: %w", err)
 	}
-	defer respStream.Close()
 
-	scanner := bufio.NewScanner(respStream)
-	for scanner.Scan() {
-		select {
-		case <-oneHourCtx.Done():
-			return nil
-		default:
-			fmt.Println(string(scanner.Bytes()))
-		}
+	err = executor.Stream(remotecommand.StreamOptions{
+		Stdin:  nil,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Tty:    false,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create stream: %w", err)
 	}
 	return nil
 }

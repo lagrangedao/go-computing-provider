@@ -20,10 +20,7 @@ type ContainerResource struct {
 	Depends       []ContainerResource
 	ReadyCmd      []string
 	GpuModel      string
-	ModelSetting  struct {
-		TargetDir string
-		Resources []ModelResource
-	}
+	Models        []ModelResource
 }
 
 type ConfigFile struct {

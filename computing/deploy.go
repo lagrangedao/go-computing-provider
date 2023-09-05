@@ -288,10 +288,10 @@ func (d *Deploy) YamlToK8s() {
 		}
 		updateJobStatus(d.jobUuid, models.JobDeployToK8s)
 
-		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
-			for _, res := range cr.ModelSetting.Resources {
+		if len(cr.Models) > 0 {
+			for _, res := range cr.Models {
 				go func(res yaml.ModelResource) {
-					downloadModelUrl(d.k8sNameSpace, d.spaceUuid, serviceHost, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+					downloadModelUrl(d.k8sNameSpace, d.spaceUuid, serviceHost, []string{"wget", res.Url, "-O", filepath.Join(res.Dir, res.Name)})
 				}(res)
 			}
 		}

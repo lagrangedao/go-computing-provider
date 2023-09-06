@@ -30,7 +30,6 @@ type API struct {
 }
 
 type LOG struct {
-	Port    int
 	CrtFile string
 	KeyFile string
 }
@@ -84,7 +83,6 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 		{"API", "Domain"},
 		{"API", "RedisUrl"},
 
-		{"LOG", "Port"},
 		{"LOG", "CrtFile"},
 		{"LOG", "KeyFile"},
 

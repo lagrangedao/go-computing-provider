@@ -33,21 +33,16 @@ func main() {
 
 	v1 := r.Group("/api/v1")
 	routers.CPManager(v1.Group("/computing"))
-	err := r.Run(":" + strconv.Itoa(conf.GetConfig().API.Port))
-	if err != nil {
-		logs.GetLogger().Fatal(err)
-	}
 
 	shutdownChan := make(chan struct{})
-
-	httpStopper, err := common.ServeHttp(r, "cp-api", strconv.Itoa(conf.GetConfig().API.Port))
+	httpStopper, err := common.ServeHttp(r, "cp-api", ":"+strconv.Itoa(conf.GetConfig().API.Port))
 	if err != nil {
 		logs.GetLogger().Fatal("failed to start cp-api endpoint: %s", err)
 	}
 
 	wssRouter := mux.NewRouter()
-	wssRouter.Get("/spaces/log").HandlerFunc(computing.GetSpaceLog)
-	wssStopper, err := common.ServeWss(wssRouter, "cp-wss", strconv.Itoa(conf.GetConfig().API.WssPort))
+	wssRouter.Name("/spaces/log").HandlerFunc(computing.GetSpaceLog)
+	wssStopper, err := common.ServeWss(wssRouter, "cp-wss", ":"+strconv.Itoa(conf.GetConfig().LOG.Port))
 	if err != nil {
 		logs.GetLogger().Fatal("failed to start cp-wss endpoint: %s", err)
 	}

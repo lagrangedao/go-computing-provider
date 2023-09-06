@@ -14,6 +14,7 @@ var config *ComputeNode
 // ComputeNode is a compute node config
 type ComputeNode struct {
 	API      API
+	LOG      LOG
 	LAG      LAG
 	MCS      MCS
 	Registry Registry
@@ -21,12 +22,17 @@ type ComputeNode struct {
 
 type API struct {
 	Port          int
-	WssPort       int
 	MultiAddress  string
 	RedisUrl      string
 	RedisPassword string
 	Domain        string
 	NodeName      string
+}
+
+type LOG struct {
+	Port    int
+	CrtFile string
+	KeyFile string
 }
 
 type LAG struct {
@@ -69,6 +75,7 @@ func GetConfig() *ComputeNode {
 func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 	requiredFields := [][]string{
 		{"API"},
+		{"LOG"},
 		{"LAG"},
 		{"MCS"},
 		{"Registry"},
@@ -76,6 +83,10 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 		{"API", "MultiAddress"},
 		{"API", "Domain"},
 		{"API", "RedisUrl"},
+
+		{"LOG", "Port"},
+		{"LOG", "CrtFile"},
+		{"LOG", "KeyFile"},
 
 		{"LAG", "ServerUrl"},
 		{"LAG", "AccessToken"},

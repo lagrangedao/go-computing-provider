@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/lagrangedao/go-computing-provider/conf"
 	"io"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -78,13 +78,12 @@ func ServeWss(h http.Handler, name string, addr string) (StopFunc, error) {
 	}
 
 	go func() {
-		wssAuthDir := ".swan_node/wss_authentication"
-		certFile, err := readFile(filepath.Join(wssAuthDir, "server.crt"))
-		if err != nil {
-			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate in.swan_node/wss_authentication")
+		certFile := conf.GetConfig().LOG.CrtFile
+		keyFile := conf.GetConfig().LOG.KeyFile
+		if _, err := os.Stat(certFile); err != nil {
+			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate.")
 			return
 		}
-		keyFile, _ := readFile(filepath.Join(wssAuthDir, "server.key"))
 
 		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)

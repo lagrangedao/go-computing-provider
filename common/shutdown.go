@@ -1,0 +1,109 @@
+package common
+
+import (
+	"context"
+	"errors"
+	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"io"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"syscall"
+	"time"
+)
+
+type StopFunc func(context.Context) error
+
+type ShutdownHandler struct {
+	Component string
+	StopFunc  StopFunc
+}
+
+func MonitorShutdown(triggerCh <-chan struct{}, handlers ...ShutdownHandler) <-chan struct{} {
+	sigCh := make(chan os.Signal, 2)
+	out := make(chan struct{})
+
+	go func() {
+		select {
+		case sig := <-sigCh:
+			logs.GetLogger().Warn("received shutdown", "signal", sig)
+		case <-triggerCh:
+			logs.GetLogger().Warn("received shutdown")
+		}
+
+		logs.GetLogger().Warn("Shutting down...")
+
+		// Call all the handlers, logging on failure and success.
+		for _, h := range handlers {
+			if err := h.StopFunc(context.TODO()); err != nil {
+				logs.GetLogger().Errorf("shutting down %s failed: %s", h.Component, err)
+				continue
+			}
+			logs.GetLogger().Infof("%s shut down successfully ", h.Component)
+		}
+
+		logs.GetLogger().Warn("Graceful shutdown successful")
+
+		close(out)
+	}()
+
+	signal.Reset(syscall.SIGTERM, syscall.SIGINT)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+	return out
+}
+
+func ServeHttp(h http.Handler, name string, addr string) (StopFunc, error) {
+	// Instantiate the server and start listening.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 60 * time.Second,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)
+		}
+	}()
+
+	return srv.Shutdown, nil
+}
+
+func ServeWss(h http.Handler, name string, addr string) (StopFunc, error) {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: 60 * time.Second,
+	}
+
+	go func() {
+		wssAuthDir := ".swan_node/wss_authentication"
+		certFile, err := readFile(filepath.Join(wssAuthDir, "server.crt"))
+		if err != nil {
+			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate in.swan_node/wss_authentication")
+			return
+		}
+		keyFile, _ := readFile(filepath.Join(wssAuthDir, "server.key"))
+
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)
+		}
+	}()
+
+	return srv.Shutdown, nil
+}
+
+func readFile(fileName string) (string, error) {
+	f, err := os.Open(fileName)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	bytes, err := io.ReadAll(f)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}

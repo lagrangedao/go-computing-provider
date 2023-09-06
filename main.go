@@ -1,12 +1,15 @@
 package main
 
 import (
+	"github.com/lagrangedao/go-computing-provider/common"
+	"github.com/lagrangedao/go-computing-provider/computing"
 	"strconv"
 	"time"
 
 	"github.com/filswan/go-swan-lib/logs"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/mux"
 	cors "github.com/itsjamie/gin-cors"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/initializer"
@@ -34,4 +37,25 @@ func main() {
 	if err != nil {
 		logs.GetLogger().Fatal(err)
 	}
+
+	shutdownChan := make(chan struct{})
+
+	httpStopper, err := common.ServeHttp(r, "cp-api", strconv.Itoa(conf.GetConfig().API.Port))
+	if err != nil {
+		logs.GetLogger().Fatal("failed to start cp-api endpoint: %s", err)
+	}
+
+	wssRouter := mux.NewRouter()
+	wssRouter.Get("/spaces/log").HandlerFunc(computing.GetSpaceLog)
+	wssStopper, err := common.ServeWss(wssRouter, "cp-wss", strconv.Itoa(conf.GetConfig().API.WssPort))
+	if err != nil {
+		logs.GetLogger().Fatal("failed to start cp-wss endpoint: %s", err)
+	}
+
+	finishCh := common.MonitorShutdown(shutdownChan,
+		common.ShutdownHandler{Component: "cp-api", StopFunc: httpStopper},
+		common.ShutdownHandler{Component: "cp-wss", StopFunc: wssStopper},
+	)
+
+	<-finishCh
 }

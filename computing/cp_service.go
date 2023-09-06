@@ -287,30 +287,60 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func GetSpaceLog(c *gin.Context) {
-	spaceUuid := c.Query("space_id")
-	logType := c.Query("type")
+func GetSpaceLog(w http.ResponseWriter, r *http.Request) {
+	spaceUuid := r.URL.Query().Get("space_id")
+	logType := r.URL.Query().Get("type")
 	if strings.TrimSpace(spaceUuid) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: space_id"})
+		errMsg := map[string]string{
+			"error": "missing required field: space_id",
+		}
+		result, _ := json.Marshal(errMsg)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(result)
+		return
 	}
 
 	if strings.TrimSpace(logType) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: type"})
+		errMsg := map[string]string{
+			"error": "missing required field: type",
+		}
+		result, _ := json.Marshal(errMsg)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(result)
+		return
 	}
 
 	if strings.TrimSpace(logType) != "build" && strings.TrimSpace(logType) != "container" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: type"})
+		errMsg := map[string]string{
+			"error": "missing required field: type",
+		}
+		result, _ := json.Marshal(errMsg)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write(result)
+		return
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
 	spaceDetail, err := retrieveJobMetadata(redisKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
+		errMsg := map[string]string{
+			"error": "not found data",
+		}
+		result, _ := json.Marshal(errMsg)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(result)
+		return
 	}
 
-	conn, err := upgrade.Upgrade(c.Writer, c.Request, nil)
+	conn, err := upgrade.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Error upgrading connection:", err)
+		errMsg := map[string]string{
+			"error": "upgrading connection failed",
+		}
+		result, _ := json.Marshal(errMsg)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write(result)
 		return
 	}
 	defer conn.Close()

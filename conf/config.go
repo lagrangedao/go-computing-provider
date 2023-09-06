@@ -21,6 +21,7 @@ type ComputeNode struct {
 
 type API struct {
 	Port          int
+	WssPort       int
 	MultiAddress  string
 	RedisUrl      string
 	RedisPassword string

@@ -48,11 +48,14 @@ func ReceiveJob(c *gin.Context) {
 	logs.GetLogger().Infof("Job received Data: %+v", jobData)
 
 	var hostName string
+	var logHost string
 	prefixStr := generateString(10)
 	if strings.HasPrefix(conf.GetConfig().API.Domain, ".") {
 		hostName = prefixStr + conf.GetConfig().API.Domain
+		logHost = "log" + conf.GetConfig().API.Domain
 	} else {
 		hostName = strings.Join([]string{prefixStr, conf.GetConfig().API.Domain}, ".")
+		logHost = "log." + conf.GetConfig().API.Domain
 	}
 
 	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobSourceURI, hostName, jobData.Duration, jobData.UUID)
@@ -73,7 +76,7 @@ func ReceiveJob(c *gin.Context) {
 	multiAddressSplit := strings.Split(conf.GetConfig().API.MultiAddress, "/")
 	jobSourceUri := jobData.JobSourceURI
 	spaceUuid := jobSourceUri[strings.LastIndex(jobSourceUri, "/")+1:]
-	wsUrl := fmt.Sprintf("wss://%s:%s/spaces/log?space_id=%s", multiAddressSplit[2], multiAddressSplit[4], spaceUuid)
+	wsUrl := fmt.Sprintf("wss://%s:%s/api/v1/computing/lagrange/spaces/log?space_id=%s", logHost, multiAddressSplit[4], spaceUuid)
 	jobData.BuildLog = wsUrl + "&type=build"
 	jobData.ContainerLog = wsUrl + "&type=container"
 
@@ -287,60 +290,30 @@ func StatisticalSources(c *gin.Context) {
 	})
 }
 
-func GetSpaceLog(w http.ResponseWriter, r *http.Request) {
-	spaceUuid := r.URL.Query().Get("space_id")
-	logType := r.URL.Query().Get("type")
+func GetSpaceLog(c *gin.Context) {
+	spaceUuid := c.Query("space_id")
+	logType := c.Query("type")
 	if strings.TrimSpace(spaceUuid) == "" {
-		errMsg := map[string]string{
-			"error": "missing required field: space_id",
-		}
-		result, _ := json.Marshal(errMsg)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(result)
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: space_id"})
 	}
 
 	if strings.TrimSpace(logType) == "" {
-		errMsg := map[string]string{
-			"error": "missing required field: type",
-		}
-		result, _ := json.Marshal(errMsg)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(result)
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: type"})
 	}
 
 	if strings.TrimSpace(logType) != "build" && strings.TrimSpace(logType) != "container" {
-		errMsg := map[string]string{
-			"error": "missing required field: type",
-		}
-		result, _ := json.Marshal(errMsg)
-		w.WriteHeader(http.StatusBadRequest)
-		w.Write(result)
-		return
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: type"})
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
 	spaceDetail, err := retrieveJobMetadata(redisKey)
 	if err != nil {
-		errMsg := map[string]string{
-			"error": "not found data",
-		}
-		result, _ := json.Marshal(errMsg)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(result)
-		return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 
-	conn, err := upgrade.Upgrade(w, r, nil)
+	conn, err := upgrade.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Println("Error upgrading connection:", err)
-		errMsg := map[string]string{
-			"error": "upgrading connection failed",
-		}
-		result, _ := json.Marshal(errMsg)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write(result)
 		return
 	}
 	defer conn.Close()

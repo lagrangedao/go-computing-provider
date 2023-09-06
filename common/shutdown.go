@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/lagrangedao/go-computing-provider/conf"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -62,7 +61,14 @@ func ServeHttp(h http.Handler, name string, addr string) (StopFunc, error) {
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		certFile := conf.GetConfig().LOG.CrtFile
+		keyFile := conf.GetConfig().LOG.KeyFile
+		if _, err := os.Stat(certFile); err != nil {
+			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate.")
+			return
+		}
+
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)
 		}
 	}()
@@ -91,18 +97,4 @@ func ServeWss(h http.Handler, name string, addr string) (StopFunc, error) {
 	}()
 
 	return srv.Shutdown, nil
-}
-
-func readFile(fileName string) (string, error) {
-	f, err := os.Open(fileName)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	bytes, err := io.ReadAll(f)
-	if err != nil {
-		return "", err
-	}
-	return string(bytes), nil
 }

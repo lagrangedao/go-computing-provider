@@ -3,6 +3,7 @@ package computing
 import (
 	"context"
 	"encoding/json"
+	stErr "errors"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/gin-gonic/gin"
@@ -261,7 +262,9 @@ func DeleteJob(c *gin.Context) {
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
 	spaceDetail, err := retrieveJobMetadata(redisKey)
-	if err != nil {
+	if err != nil && stErr.Is(err, NotFoundRedisKey) {
+		c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
+	} else {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 	}
 	deleteJob(creatorWallet, k8sNameSpace, spaceUuid, spaceDetail.SpaceName)
@@ -601,9 +604,19 @@ func getLocalIPAddress() (string, error) {
 	return strings.TrimSpace(string(ipBytes)), nil
 }
 
+var NotFoundRedisKey = stErr.New("not found redis key")
+
 func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	redisConn := redisPool.Get()
 	defer redisConn.Close()
+
+	exist, err := redis.Int(redisConn.Do("EXISTS", key))
+	if err != nil {
+		return models.CacheSpaceDetail{}, err
+	}
+	if exist == 0 {
+		return models.CacheSpaceDetail{}, NotFoundRedisKey
+	}
 
 	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid")
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))

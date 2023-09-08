@@ -19,7 +19,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -144,6 +143,7 @@ func RedeployJob(c *gin.Context) {
 		if err != nil {
 			logs.GetLogger().Errorf("error making request to Space API: %+v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
 		defer func(Body io.ReadCloser) {
 			err := Body.Close()
@@ -209,16 +209,19 @@ func ReNewJob(c *gin.Context) {
 
 	if strings.TrimSpace(jobData.SpaceUuid) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: space_uuid"})
+		return
 	}
 
 	if jobData.Duration == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: duration"})
+		return
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + jobData.SpaceUuid
 	spaceDetail, err := retrieveJobMetadata(redisKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
+		return
 	}
 
 	leftTime := spaceDetail.ExpireTime - time.Now().Unix()
@@ -227,6 +230,7 @@ func ReNewJob(c *gin.Context) {
 			"status":  "failed",
 			"message": "The job was terminated due to its expiration date",
 		})
+		return
 	} else {
 		fullArgs := []interface{}{redisKey}
 		fields := map[string]string{
@@ -253,22 +257,27 @@ func DeleteJob(c *gin.Context) {
 
 	if creatorWallet == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
+		return
 	}
 	if spaceUuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "space_uuid is required"})
+		return
 	}
 
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
 	spaceDetail, err := retrieveJobMetadata(redisKey)
-	if err != nil && stErr.Is(err, NotFoundRedisKey) {
-		c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
-	} else {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
+	if err != nil {
+		if stErr.Is(err, NotFoundRedisKey) {
+			c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
+			return
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
+			return
+		}
 	}
 	deleteJob(creatorWallet, k8sNameSpace, spaceUuid, spaceDetail.SpaceName)
-
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 
@@ -277,12 +286,14 @@ func StatisticalSources(c *gin.Context) {
 	if err != nil {
 		logs.GetLogger().Error(err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed get location info"})
+		return
 	}
 
 	k8sService := NewK8sService()
 	statisticalSources, err := k8sService.StatisticalSources(context.TODO())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
 	nodeID, _, _ := generateNodeID()
@@ -298,25 +309,30 @@ func GetSpaceLog(c *gin.Context) {
 	logType := c.Query("type")
 	if strings.TrimSpace(spaceUuid) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: space_id"})
+		return
 	}
 
 	if strings.TrimSpace(logType) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: type"})
+		return
 	}
 
 	if strings.TrimSpace(logType) != "build" && strings.TrimSpace(logType) != "container" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: type"})
+		return
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
 	spaceDetail, err := retrieveJobMetadata(redisKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
+		return
 	}
 
 	conn, err := upgrade.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("Error upgrading connection:", err)
+		logs.GetLogger().Errorf("upgrading connection failed, error: %+v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "upgrading connection failed"})
 		return
 	}
 	defer conn.Close()

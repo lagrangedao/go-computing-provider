@@ -125,7 +125,7 @@ func (ws *WsClient) readMessage() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logs.GetLogger().Error(err)
+				return
 			}
 		}()
 		for {

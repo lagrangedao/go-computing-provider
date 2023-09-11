@@ -90,7 +90,7 @@ func (ws *WsClient) HandleLogs(reader io.Reader) {
 			return
 		default:
 			del003EStr := strings.ReplaceAll(scanner.Text(), "\\u003e", ">")
-			delN := strings.ReplaceAll(del003EStr, "\n", "")
+			delN := strings.ReplaceAll(del003EStr, "\\n", "")
 			ws.message <- wsMessage{
 				data:    []byte(delN),
 				msgType: websocket.TextMessage,

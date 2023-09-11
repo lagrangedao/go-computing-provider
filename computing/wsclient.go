@@ -6,7 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"io"
 	"net/http"
-	"strconv"
+	"strings"
 	"time"
 )
 
@@ -89,13 +89,10 @@ func (ws *WsClient) HandleLogs(reader io.Reader) {
 		case <-ws.stopCh:
 			return
 		default:
-			data := scanner.Text()
-			data, err := strconv.Unquote(`"` + data + `"`)
-			if err != nil {
-				logs.GetLogger().Error("Unicode conversion failed")
-			}
+			del003EStr := strings.ReplaceAll(scanner.Text(), "\\u003e", ">")
+			delN := strings.ReplaceAll(del003EStr, "\n", "")
 			ws.message <- wsMessage{
-				data:    []byte(data),
+				data:    []byte(delN),
 				msgType: websocket.TextMessage,
 			}
 			time.Sleep(100 * time.Millisecond)

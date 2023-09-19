@@ -337,7 +337,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 		return err
 	}
 
-	imageName := "filswan/" + modelInfo.Framework + "v1.0"
+	imageName := "filswan/" + modelInfo.Framework + ":v1.0"
 
 	var wg sync.WaitGroup
 	wg.Add(1)

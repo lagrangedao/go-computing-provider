@@ -463,6 +463,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 			logs.GetLogger().Error(err)
 			return ""
 		}
+		return hostName
 	}
 
 	if containsYaml {

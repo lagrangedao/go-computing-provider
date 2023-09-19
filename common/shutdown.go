@@ -61,16 +61,19 @@ func ServeHttp(h http.Handler, name string, addr string) (StopFunc, error) {
 	}
 
 	go func() {
-		certFile := conf.GetConfig().LOG.CrtFile
-		keyFile := conf.GetConfig().LOG.KeyFile
-		if _, err := os.Stat(certFile); err != nil {
-			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate.")
-			return
-		}
+		//certFile := conf.GetConfig().LOG.CrtFile
+		//keyFile := conf.GetConfig().LOG.KeyFile
+		//if _, err := os.Stat(certFile); err != nil {
+		//	logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate.")
+		//	return
+		//}
+		//
+		//if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		//	logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)
+		//}
 
-		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)
-		}
+		srv.ListenAndServe()
+
 	}()
 
 	return srv.Shutdown, nil

@@ -45,11 +45,11 @@ def get_pipeline() -> Pipeline:
     return ALLOWED_TASKS[task](model_id)
 
 
-templates = Jinja2Templates(directory='templates')
+templates = Jinja2Templates(directory='app/templates')
 
 
 async def homepage(request):
-    context = {'request': request, 'data': os.environ['result_url']}
+    context = {'request': request, 'data': 'https://'+os.environ['result_url']}
     return templates.TemplateResponse('index.html', context)
 
 

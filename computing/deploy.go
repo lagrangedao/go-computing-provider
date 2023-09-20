@@ -337,7 +337,8 @@ func (d *Deploy) ModelInferenceToK8s() error {
 		return err
 	}
 
-	imageName := "filswan/" + modelInfo.Framework + ":v1.0"
+	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
+	imageName := "lagrange/" + modelInfo.Framework + ":v1.0"
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -356,7 +357,6 @@ func (d *Deploy) ModelInferenceToK8s() error {
 	}
 
 	d.image = imageName
-	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
 
 	if err := d.deployNamespace(); err != nil {
 		logs.GetLogger().Error(err)

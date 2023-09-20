@@ -76,26 +76,3 @@ func ServeHttp(h http.Handler, name string, addr string) (StopFunc, error) {
 
 	return srv.Shutdown, nil
 }
-
-func ServeWss(h http.Handler, name string, addr string) (StopFunc, error) {
-	srv := &http.Server{
-		Addr:              addr,
-		Handler:           h,
-		ReadHeaderTimeout: 60 * time.Second,
-	}
-
-	go func() {
-		certFile := conf.GetConfig().LOG.CrtFile
-		keyFile := conf.GetConfig().LOG.KeyFile
-		if _, err := os.Stat(certFile); err != nil {
-			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate.")
-			return
-		}
-
-		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logs.GetLogger().Fatalf("service: %s, listen: %s\n", name, err)
-		}
-	}()
-
-	return srv.Shutdown, nil
-}

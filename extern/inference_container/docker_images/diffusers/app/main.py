@@ -11,11 +11,10 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.routing import Route
-
+from starlette.templating import Jinja2Templates
 
 TASK = os.getenv("TASK")
 MODEL_ID = os.getenv("MODEL_ID")
-
 
 # Add the allowed tasks
 # Supported tasks are:
@@ -46,7 +45,16 @@ def get_pipeline() -> Pipeline:
     return ALLOWED_TASKS[task](model_id)
 
 
+templates = Jinja2Templates(directory='templates')
+
+
+async def homepage(request):
+    context = {'request': request, 'data': os.environ['result_url']}
+    return templates.TemplateResponse('index.html', context)
+
+
 routes = [
+    Route('/', endpoint=homepage),
     Route("/{whatever:path}", status_ok),
     Route("/{whatever:path}", pipeline_route, methods=["POST"]),
 ]

@@ -322,6 +322,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		return ""
 	}
 
+	walletAddress := spaceJson.Data.Owner.PublicAddress
 	creator := strings.ToLower(spaceJson.Data.Owner.PublicAddress)
 	spaceName := strings.ToLower(spaceJson.Data.Space.Name)
 	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
@@ -343,6 +344,8 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		}
 	}
 
+	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
+	os.RemoveAll(spacePath)
 	updateJobStatus(jobUuid, models.JobDownloadSource)
 	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
@@ -468,7 +471,7 @@ func dockerfileToK8s(jobUuid, hostName, creatorWallet, spaceUuid, imageName, doc
 	updateJobStatus(jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
-	if err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, containerPort); err != nil {
+	if _, err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, containerPort); err != nil {
 		logs.GetLogger().Error(err)
 		return
 	}
@@ -646,12 +649,20 @@ func yamlToK8s(jobUuid, creatorWallet, spaceUuid, yamlPath, hostName string, har
 
 		updateJobStatus(jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
-
-		if err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, int64(cr.Ports[0].ContainerPort)); err != nil {
+		serviceIp, err := deployK8sResource(k8sNameSpace, spaceUuid, hostName, int64(cr.Ports[0].ContainerPort))
+		if err != nil {
 			logs.GetLogger().Error(err)
 			return
 		}
 		updateJobStatus(jobUuid, models.JobDeployToK8s)
+
+		if cr.ModelSetting.TargetDir != "" && len(cr.ModelSetting.Resources) > 0 {
+			for _, res := range cr.ModelSetting.Resources {
+				go func(res yaml.ModelResource) {
+					downloadModelUrl(k8sNameSpace, spaceUuid, serviceIp, []string{"wget", res.Url, "-O", filepath.Join(cr.ModelSetting.TargetDir, res.Name)})
+				}(res)
+			}
+		}
 
 		watchContainerRunningTime(jobUuid, k8sNameSpace, spaceUuid, int64(duration))
 	}
@@ -689,23 +700,24 @@ func deployNamespace(creatorWallet string) error {
 	return nil
 }
 
-func deployK8sResource(k8sNameSpace, spaceUuid, hostName string, containerPort int64) error {
+func deployK8sResource(k8sNameSpace, spaceUuid, hostName string, containerPort int64) (string, error) {
 	k8sService := NewK8sService()
 
 	// create service
 	createService, err := k8sService.CreateService(context.TODO(), k8sNameSpace, spaceUuid, int32(containerPort))
 	if err != nil {
-		return fmt.Errorf("failed creata service, error: %w", err)
+		return "", fmt.Errorf("failed creata service, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created service successfully: %s", createService.GetObjectMeta().GetName())
 
+	serviceIp := fmt.Sprintf("http://%s:%d", createService.Spec.ClusterIP, createService.Spec.Ports[0].Port)
 	// create ingress
 	createIngress, err := k8sService.CreateIngress(context.TODO(), k8sNameSpace, spaceUuid, hostName, int32(containerPort))
 	if err != nil {
-		return fmt.Errorf("failed creata ingress, error: %w", err)
+		return "", fmt.Errorf("failed creata ingress, error: %w", err)
 	}
 	logs.GetLogger().Infof("Created Ingress successfully: %s", createIngress.GetObjectMeta().GetName())
-	return nil
+	return serviceIp, nil
 }
 
 func deleteJob(namespace, spaceUuid string) {
@@ -812,6 +824,20 @@ func watchContainerRunningTime(key, namespace, spaceUuid string, runTime int64) 
 			}
 		}
 	}()
+}
+
+func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
+	k8sService := NewK8sService()
+	podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid, serviceIp)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	if err = k8sService.PodDoCommand(namespace, podName, "", podCmd); err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
 }
 
 func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {

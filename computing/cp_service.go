@@ -19,7 +19,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -274,12 +273,11 @@ func DeleteJob(c *gin.Context) {
 			c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 			return
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
 			return
 		}
 	}
 	deleteJob(creatorWallet, k8sNameSpace, spaceUuid, spaceDetail.SpaceName)
-
 	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
 }
 
@@ -333,7 +331,7 @@ func GetSpaceLog(c *gin.Context) {
 
 	conn, err := upgrade.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("Error upgrading connection:", err)
+		logs.GetLogger().Errorf("upgrading connection failed, error: %+v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "upgrading connection failed"})
 		return
 	}
@@ -531,6 +529,20 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 			logs.GetLogger().Infof("Deleted all resource finised. spaceUuid: %s", spaceUuid)
 			break
 		}
+	}
+}
+
+func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
+	k8sService := NewK8sService()
+	podName, err := k8sService.WaitForPodRunning(namespace, spaceUuid, serviceIp)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return
+	}
+
+	if err = k8sService.PodDoCommand(namespace, podName, "", podCmd); err != nil {
+		logs.GetLogger().Error(err)
+		return
 	}
 }
 

@@ -3,16 +3,22 @@ package computing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/models"
 	"io"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/retry"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
@@ -28,16 +34,19 @@ import (
 
 var clientSet *kubernetes.Clientset
 var k8sOnce sync.Once
+var config *rest.Config
+var version string
 
 type K8sService struct {
 	k8sClient *kubernetes.Clientset
 	Version   string
+	config    *rest.Config
 }
 
 func NewK8sService() *K8sService {
-	var version string
+	var err error
 	k8sOnce.Do(func() {
-		config, err := rest.InClusterConfig()
+		config, err = rest.InClusterConfig()
 		if err != nil {
 			var kubeConfig *string
 			if home := homedir.HomeDir(); home != "" {
@@ -69,6 +78,7 @@ func NewK8sService() *K8sService {
 	return &K8sService{
 		k8sClient: clientSet,
 		Version:   version,
+		config:    config,
 	}
 }
 
@@ -420,6 +430,72 @@ func (s *K8sService) AddNodeLabel(nodeName, key string) error {
 	return nil
 }
 
+func (s *K8sService) WaitForPodRunning(namespace, spaceUuid, serviceIp string) (string, error) {
+	var podName string
+	var podErr = errors.New("get pod status failed")
+
+	retryErr := retry.OnError(wait.Backoff{
+		Steps:    120,
+		Duration: 10 * time.Second,
+	}, func(err error) bool {
+		return err != nil && err.Error() == podErr.Error()
+	}, func() error {
+		if _, err := http.Get(serviceIp); err != nil {
+			return podErr
+		}
+		podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
+			LabelSelector: fmt.Sprintf("lad_app==%s", spaceUuid),
+		})
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return podErr
+		}
+		podName = podList.Items[0].Name
+
+		return nil
+	})
+
+	if retryErr != nil {
+		return podName, fmt.Errorf("failed waiting for pods to be running: %v", retryErr)
+	}
+	return podName, nil
+}
+
+func (s *K8sService) PodDoCommand(namespace, podName, containerName string, podCmd []string) error {
+	reader, writer := io.Pipe()
+	req := s.k8sClient.CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&coreV1.PodExecOptions{
+			Container: containerName,
+			Command:   podCmd,
+			Stdin:     true,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(s.config, "POST", req.URL())
+	if err != nil {
+		return fmt.Errorf("failed to create spdy client: %w", err)
+	}
+
+	err = executor.Stream(remotecommand.StreamOptions{
+		Stdin:  reader,
+		Stdout: writer,
+		Stderr: writer,
+		Tty:    false,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create stream: %w", err)
+	}
+
+	return nil
+}
+
 func readLog(req *rest.Request) (*strings.Builder, error) {
 	podLogs, err := req.Stream(context.TODO())
 	if err != nil {
@@ -443,60 +519,6 @@ func generateLabel(name string) map[string]string {
 	} else {
 		return map[string]string{}
 	}
-}
-
-func IsKubernetesVersionGreaterThan(version string, targetVersion string) bool {
-	v1, err := parseKubernetesVersion(version)
-	if err != nil {
-		return false
-	}
-
-	v2, err := parseKubernetesVersion(targetVersion)
-	if err != nil {
-		return false
-	}
-
-	if v1.major > v2.major {
-		return true
-	} else if v1.major == v2.major && v1.minor > v2.minor {
-		return true
-	} else if v1.major == v2.major && v1.minor == v2.minor && v1.patch > v2.patch {
-		return true
-	}
-
-	return false
-}
-
-type kubernetesVersion struct {
-	major int
-	minor int
-	patch int
-}
-
-func parseKubernetesVersion(version string) (*kubernetesVersion, error) {
-	v := &kubernetesVersion{}
-
-	parts := strings.Split(strings.ReplaceAll(version, "v", ""), ".")
-	if len(parts) != 3 {
-		return nil, fmt.Errorf("invalid version format")
-	}
-
-	_, err := fmt.Sscanf(parts[0], "%d", &v.major)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse major version")
-	}
-
-	_, err = fmt.Sscanf(parts[1], "%d", &v.minor)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse minor version")
-	}
-
-	_, err = fmt.Sscanf(parts[2], "%d", &v.patch)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse patch version")
-	}
-
-	return v, nil
 }
 
 type collectGpuInfo struct {

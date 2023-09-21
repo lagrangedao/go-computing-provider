@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -59,7 +60,7 @@ func (ws *WsClient) Close() {
 func (ws *WsClient) HandleLogs(reader io.Reader) {
 	defer func() {
 		if err := recover(); err != nil {
-			logs.GetLogger().Error(err)
+			return
 		}
 	}()
 
@@ -88,8 +89,10 @@ func (ws *WsClient) HandleLogs(reader io.Reader) {
 		case <-ws.stopCh:
 			return
 		default:
+			del003EStr := strings.ReplaceAll(scanner.Text(), "\\u003e", ">")
+			delN := strings.ReplaceAll(del003EStr, "\\n", "")
 			ws.message <- wsMessage{
-				data:    scanner.Bytes(),
+				data:    []byte(delN),
 				msgType: websocket.TextMessage,
 			}
 			time.Sleep(100 * time.Millisecond)

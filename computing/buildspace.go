@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,24 +18,6 @@ import (
 )
 
 var NotFoundError = errors.New("not found resource")
-
-func getSpaceName(apiURL string) (string, string, error) {
-	parsedURL, err := url.Parse(apiURL)
-	if err != nil {
-		return "", "", err
-	}
-
-	pathSegments := parsedURL.Path[1:]
-	segments := strings.Split(pathSegments, "/")
-
-	if len(segments) < 2 || segments[0] != "spaces" {
-		return "", "", errors.New("invalid URL format")
-	}
-
-	creator := segments[1]
-	spaceName := segments[2]
-	return creator, spaceName, nil
-}
 
 func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, string, string, error) {
 	var err error
@@ -82,7 +63,7 @@ func getDownloadPath(fileName string) string {
 
 func BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath string) (string, string) {
 	updateJobStatus(jobUuid, models.JobBuildImage)
-	spaceFlag := spaceName + spaceUuid[:strings.LastIndex(spaceUuid, "-")]
+	spaceFlag := spaceName + spaceUuid[strings.LastIndex(spaceUuid, "-"):]
 	imageName := fmt.Sprintf("lagrange/%s:%d", spaceFlag, time.Now().Unix())
 	if conf.GetConfig().Registry.ServerAddress != "" {
 		imageName = fmt.Sprintf("%s/%s:%d",

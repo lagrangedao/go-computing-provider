@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/lagrangedao/go-computing-provider/common"
 	"strconv"
 	"time"
 
@@ -30,8 +31,16 @@ func main() {
 
 	v1 := r.Group("/api/v1")
 	routers.CPManager(v1.Group("/computing"))
-	err := r.Run(":" + strconv.Itoa(conf.GetConfig().API.Port))
+
+	shutdownChan := make(chan struct{})
+	httpStopper, err := common.ServeHttp(r, "cp-api", ":"+strconv.Itoa(conf.GetConfig().API.Port))
 	if err != nil {
-		logs.GetLogger().Fatal(err)
+		logs.GetLogger().Fatal("failed to start cp-api endpoint: %s", err)
 	}
+
+	finishCh := common.MonitorShutdown(shutdownChan,
+		common.ShutdownHandler{Component: "cp-api", StopFunc: httpStopper},
+	)
+
+	<-finishCh
 }

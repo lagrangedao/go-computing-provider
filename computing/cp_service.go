@@ -451,10 +451,19 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
 	os.RemoveAll(spacePath)
 	updateJobStatus(jobUuid, models.JobDownloadSource)
-	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
+	containsYaml, yamlPath, imagePath, modelsSettingFile, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return ""
+	}
+
+	if len(modelsSettingFile) > 0 {
+		err := deploy.WithModelSettingFile(modelsSettingFile).ModelInferenceToK8s()
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return ""
+		}
+		return hostName
 	}
 
 	if containsYaml {

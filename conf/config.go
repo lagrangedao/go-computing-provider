@@ -27,6 +27,7 @@ type API struct {
 	RedisPassword string
 	Domain        string
 	NodeName      string
+	PythonDir     string
 }
 
 type LOG struct {

@@ -295,7 +295,7 @@ systemctl start redis-server.service
 	Firstly, clone the code to your local:
 ```bash
 git clone https://github.com/lagrangedao/go-computing-provider.git
-git checkout mars-testnet
+git checkout v0.2.0
 ```
 
 Then build the Computing provider follow the below steps:
@@ -325,6 +325,10 @@ Domain = ""                                     # The domain name
 RedisUrl = "redis://127.0.0.1:6379"           # The redis server address
 RedisPassword = ""                            # The redis server access password
 
+[LOG]
+CrtFile = "/YOUR_DOMAIN_NAME_CRT_PATH/server.crt"	# Your domain name SSL .crt file path
+KeyFile = "/YOUR_DOMAIN_NAME_KEY_PATH/server.key"   	# Your domain name SSL .key file path
+
 [LAG]
 ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
 AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
@@ -332,10 +336,9 @@ AccessToken = ""                              # Lagrange access token, acquired 
 
 [MCS]
 ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
-AccessToken = ""                              # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
 BucketName = ""                               # Acquired from "https://www.multichain.storage" -> bucket -> Add Bucket
 Network = "polygon.mainnet"                   # polygon.mainnet for mainnet, polygon.mumbai for testnet
-FileCachePath = "/tmp"                            # Cache directory of job data
+FileCachePath = "/tmp"                        # Cache directory of job data
 
 [Registry]                                    
 ServerAddress = ""                            # The docker container image registry address, if only a single node, you can ignore
@@ -347,7 +350,7 @@ Password = ""                                 # The login password, if only a si
 ## Start the Computing Provider
 You can run computing-provider using the following command:
 ```bash
-nohup ./computing-provider >> cp.log 2>&1 & 
+nohup ./computing-provider run >> cp.log 2>&1 & 
 ```
 
 ## Getting Help

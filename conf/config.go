@@ -90,7 +90,6 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 		{"LAG", "AccessToken"},
 
 		{"MCS", "ApiKey"},
-		{"MCS", "AccessToken"},
 		{"MCS", "BucketName"},
 		{"MCS", "Network"},
 		{"MCS", "FileCachePath"},

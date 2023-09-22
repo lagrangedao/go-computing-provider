@@ -40,9 +40,6 @@ func (s *ScheduleTask) Run() {
 				if flag := reportJobStatus(jobUuid, jobStatus); flag {
 					s.TaskMap.Delete(jobUuid)
 				}
-				if jobStatus == models.JobDeployToK8s {
-					s.TaskMap.Delete(jobUuid)
-				}
 				return true
 			})
 		}
@@ -82,7 +79,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 		return true
 	}
 	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
-	return false
+	return true
 }
 
 func RunSyncTask() {

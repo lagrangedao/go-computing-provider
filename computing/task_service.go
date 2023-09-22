@@ -82,7 +82,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	return true
 }
 
-func RunSyncTask() {
+func RunSyncTask(nodeId string) {
 	go func() {
 		k8sService := NewK8sService()
 		nodes, err := k8sService.k8sClient.CoreV1().Nodes().List(context.TODO(), metaV1.ListOptions{})
@@ -129,7 +129,6 @@ func RunSyncTask() {
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
-		nodeId, _, _ := generateNodeID()
 
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -150,7 +149,6 @@ func RunSyncTask() {
 		defer ticker.Stop()
 
 		logs.GetLogger().Infof("provider status: %s", models.ActiveStatus)
-		nodeId, _, _ := generateNodeID()
 
 		for range ticker.C {
 			providerStatus, err := checkClusterProviderStatus()

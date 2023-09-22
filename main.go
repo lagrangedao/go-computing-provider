@@ -49,7 +49,9 @@ var runCmd = &cli.Command{
 	Usage: "Start a cp process",
 	Action: func(cctx *cli.Context) error {
 		logs.GetLogger().Info("Start in computing provider mode.")
-		initializer.ProjectInit()
+
+		cpRepoPath := cctx.String(FlagCpRepo)
+		initializer.ProjectInit(cpRepoPath)
 
 		r := gin.Default()
 		r.Use(cors.Middleware(cors.Config{

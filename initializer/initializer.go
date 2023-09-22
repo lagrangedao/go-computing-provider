@@ -53,17 +53,17 @@ func sendHeartbeats(nodeId string) {
 		sendHeartbeat(nodeId)
 	}
 }
-func ProjectInit() {
-	if err := conf.InitConfig(); err != nil {
+func ProjectInit(cpRepoPath string) {
+	if err := conf.InitConfig(cpRepoPath); err != nil {
 		logs.GetLogger().Fatal(err)
 	}
-	nodeID := computing.InitComputingProvider()
+	nodeID := computing.InitComputingProvider(cpRepoPath)
 	// Start sending heartbeats
 	go sendHeartbeats(nodeID)
 
 	go computing.NewScheduleTask().Run()
 
-	computing.RunSyncTask()
+	computing.RunSyncTask(nodeID)
 	celeryService := computing.NewCeleryService()
 	celeryService.RegisterTask(constants.TASK_DEPLOY, computing.DeploySpaceTask)
 	celeryService.Start()

@@ -295,14 +295,13 @@ systemctl start redis-server.service
 	Firstly, clone the code to your local:
 ```bash
 git clone https://github.com/lagrangedao/go-computing-provider.git
+cd go-computing-provider
 git checkout v0.2.0
 ```
 
 Then build the Computing provider follow the below steps:
 
 ```bash
-cd go-computing-provider
-
 go mod tidy
 
 go build -o computing-provider main.go

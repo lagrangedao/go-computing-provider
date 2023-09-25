@@ -32,16 +32,13 @@ func (s *ScheduleTask) Run() {
 	for {
 		select {
 		case job := <-deployingChan:
-			s.TaskMap.Store(job.Uuid, job.Status)
+			s.TaskMap.Store(job.Uuid+"###"+string(job.Status), job.Status)
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
-				jobUuid := key.(string)
+				jobUuid := strings.Split(key.(string), "###")[0]
 				jobStatus := value.(models.JobStatus)
 				if flag := reportJobStatus(jobUuid, jobStatus); flag {
-					s.TaskMap.Delete(jobUuid)
-				}
-				if jobStatus == models.JobDeployToK8s {
-					s.TaskMap.Delete(jobUuid)
+					s.TaskMap.Delete(key)
 				}
 				return true
 			})

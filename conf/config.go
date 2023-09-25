@@ -3,7 +3,6 @@ package conf
 import (
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
@@ -53,9 +52,8 @@ type Registry struct {
 	Password      string
 }
 
-func InitConfig() error {
-	currentDir, _ := os.Getwd()
-	configFile := filepath.Join(currentDir, "config.toml")
+func InitConfig(cpRepoPath string) error {
+	configFile := filepath.Join(cpRepoPath, "config.toml")
 
 	if metaData, err := toml.DecodeFile(configFile, &config); err != nil {
 		return fmt.Errorf("failed load config file, path: %s, error: %w", configFile, err)

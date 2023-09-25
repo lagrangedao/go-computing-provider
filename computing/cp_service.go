@@ -296,9 +296,7 @@ func StatisticalSources(c *gin.Context) {
 		return
 	}
 
-	nodeID, _, _ := generateNodeID()
 	c.JSON(http.StatusOK, models.ClusterResource{
-		NodeId:      nodeID,
 		Region:      location,
 		ClusterInfo: statisticalSources,
 	})

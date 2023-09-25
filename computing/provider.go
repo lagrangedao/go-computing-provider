@@ -74,8 +74,8 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 	}
 }
 
-func InitComputingProvider() string {
-	nodeID, peerID, address := generateNodeID()
+func InitComputingProvider(cpRepoPath string) string {
+	nodeID, peerID, address := generateNodeID(cpRepoPath)
 
 	logs.GetLogger().Infof("Node ID :%s Peer ID:%s address:%s",
 		nodeID,
@@ -83,8 +83,8 @@ func InitComputingProvider() string {
 	updateProviderInfo(nodeID, peerID, address, models.ActiveStatus)
 	return nodeID
 }
-func generateNodeID() (string, string, string) {
-	privateKeyPath := ".swan_node/private_key"
+func generateNodeID(cpRepoPath string) (string, string, string) {
+	privateKeyPath := filepath.Join(cpRepoPath, "private_key")
 	var privateKeyBytes []byte
 
 	if _, err := os.Stat(privateKeyPath); err == nil {

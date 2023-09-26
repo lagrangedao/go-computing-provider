@@ -29,13 +29,22 @@ func NewStorageService() *StorageService {
 			NetWork:        conf.GetConfig().MCS.Network,
 			BucketName:     conf.GetConfig().MCS.BucketName,
 		}
+		var err error
+		var mcsClient *user.McsClient
+
+		if storage.McsAccessToken != "" {
+			mcsClient, err = user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)
+		} else {
+			mcsClient, err = user.LoginByApikeyV2(storage.McsApiKey, storage.NetWork)
+		}
+
+		if err != nil {
+			logs.GetLogger().Errorf("Failed creating mcsClient, error: %v", err)
+			return
+		}
+		storage.mcsClient = mcsClient
 	})
-	mcsClient, err := user.LoginByApikey(storage.McsApiKey, storage.McsAccessToken, storage.NetWork)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed creating mcsClient, error: %v", err)
-		return nil
-	}
-	storage.mcsClient = mcsClient
+
 	return storage
 }
 

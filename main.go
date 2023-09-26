@@ -82,8 +82,10 @@ var runCmd = &cli.Command{
 	},
 }
 
+var CurrentCommit string
+
 const BuildVersion = "0.2.0"
 
 func version() string {
-	return BuildVersion
+	return BuildVersion + CurrentCommit
 }

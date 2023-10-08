@@ -32,18 +32,48 @@ func (s *ScheduleTask) Run() {
 	for {
 		select {
 		case job := <-deployingChan:
-			s.TaskMap.Store(job.Uuid+"###"+string(job.Status), job.Status)
+			s.storeJobStatus(job.Uuid, string(job.Status))
+
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
-				jobUuid := strings.Split(key.(string), "###")[0]
-				jobStatus := value.(models.JobStatus)
-				if flag := reportJobStatus(jobUuid, jobStatus); flag {
-					s.TaskMap.Delete(key)
+				jobUuid := key.(string)
+				data := value.([]string)
+				for _, status := range data {
+					reportJobStatus(jobUuid, models.JobStatus(status))
+					s.deleteJobStatus(jobUuid, status)
 				}
+
 				return true
 			})
 		}
 	}
+}
+
+func (s *ScheduleTask) storeJobStatus(key, value string) {
+	var dataStore []string
+	store, exist := s.TaskMap.Load(key)
+	if exist {
+		dataStore = store.([]string)
+	} else {
+		dataStore = make([]string, 0)
+	}
+	dataStore = append(dataStore, value)
+	s.TaskMap.Store(key, dataStore)
+}
+
+func (s *ScheduleTask) deleteJobStatus(key, value string) {
+	dataStore, _ := s.TaskMap.Load(key)
+	newDtaStore := make([]string, 0)
+	for _, v := range dataStore.([]string) {
+		if !strings.EqualFold(value, v) {
+			newDtaStore = append(newDtaStore, v)
+		}
+	}
+	if len(newDtaStore) == 0 {
+		s.TaskMap.Delete(key)
+		return
+	}
+	s.TaskMap.Store(key, newDtaStore)
 }
 
 func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {

@@ -12,6 +12,8 @@ from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.routing import Route
 from starlette.templating import Jinja2Templates
+from starlette.routing import Mount
+from starlette.staticfiles import StaticFiles
 
 TASK = os.getenv("TASK")
 MODEL_ID = os.getenv("MODEL_ID")
@@ -49,11 +51,56 @@ templates = Jinja2Templates(directory='app/templates')
 
 
 async def homepage(request):
-    context = {'request': request, 'data': 'https://'+os.environ['result_url']}
+    api_url = 'https://' + os.environ['result_url']
+    python_code = f"""
+    import requests
+    
+    API_URL = {api_url}
+
+    def query(payload):
+      response = requests.post(API_URL, json=payload)
+      return response.content
+    image_bytes = query({{
+      "inputs": "Astronaut riding a horse",
+    }})
+    # You can access the image with PIL.Image for example
+    import io
+    from PIL import Image
+    image = Image.open(io.BytesIO(image_bytes))
+    """
+
+    curl_code = f"""
+    curl  {api_url} \\
+        -X POST \\
+        -d '{{"inputs": "Astronaut riding a horse"}}' \\
+        --output horse.jpg
+    """
+
+    javaScript_code = f"""
+    async function query(data) {{
+        const response = await fetch(
+            " {api_url}",
+            {{
+                method: "POST",
+                body: JSON.stringify(data),
+            }}
+        );
+        const result = await response.blob();
+        return result;
+        }}
+    query({{"inputs": "Astronaut riding a horse"}}).then((response) => {{
+        // Use image
+    }});
+    """
+
+    context = {'request': request, 'api_url': api_url, 'python_code': python_code,
+               'javaScript_code': javaScript_code, 'curl_code': curl_code}
     return templates.TemplateResponse('index.html', context)
 
 
 routes = [
+    Mount('/static', app=StaticFiles(directory="app/templates/static"), name="static"),
+
     Route('/', endpoint=homepage),
     Route("/{whatever:path}", status_ok),
     Route("/{whatever:path}", pipeline_route, methods=["POST"]),

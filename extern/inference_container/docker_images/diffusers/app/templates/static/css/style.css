@@ -1,0 +1,117 @@
+* {
+    margin: 0;
+    padding: 0;
+}
+
+html,
+body,
+#app,
+.wrapper {
+    background-color: #fff;
+    font-size: 16px;
+}
+
+body {
+    font-family: 'PingFang SC', "Helvetica Neue", Helvetica, "microsoft yahei", arial, STHeiTi, sans-serif;
+}
+
+a {
+    text-decoration: none
+}
+
+#container {
+    width: 90%;
+    max-width: 1260px;
+    padding: 25px 0;
+    margin: auto;
+    word-break: break-all;
+}
+
+.title {
+    padding: 8px 10px;
+    font-size: 20px;
+    font-weight: 600;
+    border-bottom: 1px solid #eee;
+}
+
+.title>p {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.title>p:hover {
+    text-decoration: underline;
+}
+
+.tabs {
+    padding: 15px 0 0;
+}
+
+.tabs>.nav-pills {
+    padding: 14px 10px;
+    /* border-bottom: 1px solid rgb(243, 244, 246); */
+}
+
+.tabs>.nav-pills>li {
+    margin: 0 8px 0 0;
+}
+
+.tabs>.nav-pills>li.active>a,
+.tabs>.nav-pills>li.active>a:focus,
+.tabs>.nav-pills>li.active>a:hover {
+    background-color: rgb(0, 0, 0);
+}
+
+.tabs>.nav-pills>li>a {
+    display: flex;
+    align-items: center;
+    padding: 3px 6px;
+    border: 1px solid rgb(229, 231, 235);
+    border-radius: 8px;
+    color: rgb(107, 114, 128);
+}
+
+.tabs>.nav-pills>li>a>svg,
+.tab-content>.tab-pane>.btn>svg {
+    width: 15px;
+    height: 15px;
+    margin: 0 5px 0 0;
+}
+
+.tab-content {
+    padding: 10px 0 20px;
+}
+
+.tab-content>.tab-pane {
+    position: relative;
+    width: 100%;
+    min-height: 150px;
+    padding: 0 24px;
+    background-color: rgb(248, 249, 250);
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.tab-content>.tab-pane>pre,
+.tab-content>.tab-pane>pre>code {
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    font-size: inherit;
+    border: 0;
+}
+
+.tab-content>.tab-pane>.btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    align-items: center;
+    padding: 2px 8px;
+    font-size: 14px;
+    border-radius: 8px;
+    border-color: rgb(229, 231, 235) !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, .05);
+    color: rgb(75, 85, 99);
+    z-index: 9;
+}

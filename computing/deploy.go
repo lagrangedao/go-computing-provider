@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/lagrangedao/go-computing-provider/common"
-	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/docker"
 	"github.com/lagrangedao/go-computing-provider/models"
@@ -125,6 +124,7 @@ func (d *Deploy) DockerfileToK8s() {
 						Env:       d.createEnv(),
 						Resources: d.createResources(),
 					}},
+					RestartPolicy: coreV1.RestartPolicyNever,
 				},
 			},
 		}}
@@ -274,9 +274,10 @@ func (d *Deploy) YamlToK8s() {
 						Namespace: d.k8sNameSpace,
 					},
 					Spec: coreV1.PodSpec{
-						NodeSelector: generateLabel(d.hardwareResource.Gpu.Unit),
-						Containers:   containers,
-						Volumes:      volumes,
+						NodeSelector:  generateLabel(d.hardwareResource.Gpu.Unit),
+						Containers:    containers,
+						Volumes:       volumes,
+						RestartPolicy: coreV1.RestartPolicyNever,
 					},
 				},
 			}}
@@ -320,7 +321,10 @@ func (d *Deploy) ModelInferenceToK8s() error {
 		return err
 	}
 
-	modelInfoOut, err := common.RunPythonScript(filepath.Join(conf.GetConfig().API.PythonDir, "/scripts/hf_client.py"), "model_info", modelSetting.ModelId)
+	cpPath, _ := os.LookupEnv("")
+	basePath := filepath.Join(cpPath, "inference-model")
+
+	modelInfoOut, err := common.RunPythonScript(filepath.Join(basePath, "/scripts/hf_client.py"), "model_info", modelSetting.ModelId)
 	if err != nil {
 		logs.GetLogger().Errorf("exec model_info cmd failed, error: %+v", err)
 		return err
@@ -342,7 +346,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	common.StreamPythonScriptOutput(&wg, filepath.Join(conf.GetConfig().API.PythonDir, "build_docker.py"), conf.GetConfig().API.PythonDir, modelInfo.Framework, imageName)
+	common.StreamPythonScriptOutput(&wg, filepath.Join(basePath, "build_docker.py"), basePath, modelInfo.Framework, imageName)
 	wg.Wait()
 
 	modelEnvs := []coreV1.EnvVar{
@@ -396,6 +400,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 						Env:       d.createEnv(modelEnvs...),
 						Resources: d.createResources(),
 					}},
+					RestartPolicy: coreV1.RestartPolicyNever,
 				},
 			},
 		}}

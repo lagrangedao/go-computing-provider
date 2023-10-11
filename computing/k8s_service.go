@@ -404,7 +404,7 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 		req := s.k8sClient.CoreV1().Pods("kube-system").GetLogs(pod.Name, &podLogOptions)
 		buf, err := readLog(req)
 		if err != nil {
-			logs.GetLogger().Errorf("collect gpu log, podName: %s, error: %+v", pod.Name, err)
+			logs.GetLogger().Errorf("collect gpu log, nodeName: %s, please check resource-exporter pod status. error: %+v", pod.Spec.NodeName, err)
 			continue
 		}
 		result[pod.Spec.NodeName] = buf

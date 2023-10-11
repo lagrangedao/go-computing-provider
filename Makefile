@@ -1,5 +1,33 @@
+SHELL=/usr/bin/env bash
 
+project_name=computing-provider
 
+cpRepo=$(shell env | grep CP_PATH | awk -F= '{print $$2}')
+ifeq ($(cpRepo),)
+$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
+else
+$(info CP_PATH is set to $(cpRepo))
+endif
 
-generate_wss:
-	openssl genrsa -out server.key 2048
+unexport GOFLAGS
+
+GOCC?=go
+
+ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
+GOFLAGS+=-ldflags="$(ldflags)"
+
+build/.get-model:
+	git clone https://github.com/FogMeta/api-inference-community.git $(cpRepo)/inference-model
+
+build: build/.get-model
+	rm -rf $(project_name)
+	$(GOCC) build $(GOFLAGS) -o $(project_name) main.go
+.PHONY: build
+
+install:
+	install -C $(project_name) /usr/local/bin/$(project_name)
+
+clean:
+	rm -rf $(cpRepo)/inference-model
+	rm -rf /usr/local/bin/$(project_name)
+.PHONY: clean

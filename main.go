@@ -30,7 +30,7 @@ func main() {
 				Name:    FlagCpRepo,
 				EnvVars: []string{"CP_PATH"},
 				Usage:   "cp repo path",
-				Value:   "~/.swan_node",
+				Value:   "~/.swan/computing",
 			},
 		},
 		Commands: []*cli.Command{
@@ -49,7 +49,11 @@ var runCmd = &cli.Command{
 	Usage: "Start a cp process",
 	Action: func(cctx *cli.Context) error {
 		logs.GetLogger().Info("Start in computing provider mode.")
-		initializer.ProjectInit()
+
+		cpRepoPath := cctx.String(FlagCpRepo)
+		os.Setenv("CP_PATH", cpRepoPath)
+
+		initializer.ProjectInit(cpRepoPath)
 
 		r := gin.Default()
 		r.Use(cors.Middleware(cors.Config{
@@ -80,8 +84,10 @@ var runCmd = &cli.Command{
 	},
 }
 
+var CurrentCommit string
+
 const BuildVersion = "0.2.0"
 
 func version() string {
-	return BuildVersion
+	return BuildVersion + CurrentCommit
 }

@@ -95,7 +95,6 @@ func (ws *WsClient) HandleLogs(reader io.Reader) {
 				data:    []byte(delN),
 				msgType: websocket.TextMessage,
 			}
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }

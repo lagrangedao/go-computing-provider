@@ -546,11 +546,22 @@ func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
 	}
 }
 
-func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {
+func updateJobStatus(jobUuid string, jobStatus models.JobStatus, url ...string) {
 	go func() {
-		deployingChan <- models.Job{
-			Uuid:   jobUuid,
-			Status: jobStatus,
+		if len(url) > 0 {
+			deployingChan <- models.Job{
+				Uuid:   jobUuid,
+				Status: jobStatus,
+				Count:  0,
+				Url:    url[0],
+			}
+		} else {
+			deployingChan <- models.Job{
+				Uuid:   jobUuid,
+				Status: jobStatus,
+				Count:  0,
+				Url:    "",
+			}
 		}
 	}()
 }

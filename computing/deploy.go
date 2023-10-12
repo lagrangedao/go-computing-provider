@@ -131,7 +131,7 @@ func (d *Deploy) DockerfileToK8s() {
 		logs.GetLogger().Error(err)
 		return
 	}
-	updateJobStatus(d.jobUuid, models.JobDeployToK8s)
+	updateJobStatus(d.jobUuid, models.JobDeployToK8s, "https://"+d.hostName)
 
 	d.watchContainerRunningTime()
 	return
@@ -285,7 +285,7 @@ func (d *Deploy) YamlToK8s() {
 			logs.GetLogger().Error(err)
 			return
 		}
-		updateJobStatus(d.jobUuid, models.JobDeployToK8s)
+		updateJobStatus(d.jobUuid, models.JobDeployToK8s, "https://"+d.hostName)
 
 		if len(cr.Models) > 0 {
 			for _, res := range cr.Models {

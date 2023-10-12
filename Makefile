@@ -17,7 +17,7 @@ ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --m
 GOFLAGS+=-ldflags="$(ldflags)"
 
 build/.get-model:
-	git clone https://github.com/FogMeta/api-inference-community.git $(cpRepo)/inference-model
+	git clone https://github.com/sonic-chain/api-inference-community.git $(cpRepo)/inference-model
 
 build: build/.get-model
 	rm -rf $(project_name)

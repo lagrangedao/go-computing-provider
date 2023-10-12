@@ -11,7 +11,7 @@ GOCC?=go
 ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
 GOFLAGS+=-ldflags="$(ldflags)"
 
-build: check get-model
+build: get-model
 	rm -rf $(project_name)
 	$(GOCC) build $(GOFLAGS) -o $(project_name) main.go
 .PHONY: build

@@ -17,6 +17,9 @@ ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --m
 GOFLAGS+=-ldflags="$(ldflags)"
 
 build/.get-model:
+	if [ ! -d $(cpRepo)/inference-model ]; then \
+            mkdir -p $(cpRepo)/inference-model; \
+    fi
 	git clone https://github.com/sonic-chain/api-inference-community.git $(cpRepo)/inference-model
 
 build: build/.get-model

@@ -2,13 +2,6 @@ SHELL=/usr/bin/env bash
 
 project_name=computing-provider
 
-cpRepo=$(shell env | grep CP_PATH | awk -F= '{print $$2}')
-ifeq ($(cpRepo),)
-$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
-else
-$(info CP_PATH is set to $(cpRepo))
-endif
-
 unexport GOFLAGS
 
 GOCC?=go
@@ -17,11 +10,23 @@ ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --m
 GOFLAGS+=-ldflags="$(ldflags)"
 
 build: build/.get-model
+	@[[ $$(type -P $(project_name) ) ]] && echo "Caution: you have \
+an existing $(project_name) binary in your PATH. This may cause problems if you don't run 'sudo make install'" || true
+.PHONY:build
+
+computing-provider:
 	rm -rf $(project_name)
 	$(GOCC) build $(GOFLAGS) -o $(project_name) main.go
-.PHONY: build
+.PHONY: computing-provider
 
 build/.get-model:
+	cpRepo=$(shell env | grep CP_PATH | awk -F= '{print $$2}')
+    ifeq ($(cpRepo),)
+    	$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
+    else
+    	$(info CP_PATH is set to $(cpRepo))
+    endif
+
 	if [ ! -d $(cpRepo)/inference-model ]; then \
     	mkdir -p $(cpRepo)/inference-model; \
     fi

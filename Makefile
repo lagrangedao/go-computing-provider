@@ -18,9 +18,10 @@ GOFLAGS+=-ldflags="$(ldflags)"
 
 build/.get-model:
 	if [ ! -d $(cpRepo)/inference-model ]; then \
-            sudo mkdir -p $(cpRepo)/inference-model; \
+    	mkdir -p $(cpRepo)/inference-model; \
     fi
 	git clone https://github.com/sonic-chain/api-inference-community.git $(cpRepo)/inference-model
+	cd $(cpRepo)/inference-model && git checkout fea-lag-code
 
 build: build/.get-model
 	rm -rf $(project_name)

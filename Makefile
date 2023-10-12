@@ -24,8 +24,9 @@ computing-provider: build/.get-model
 build/.get-model:
     ifndef $(cpRepo)
 		$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
+    else
+    	$(info CP_PATH is set to $(cpRepo))
     endif
-    $(info CP_PATH is set to $(cpRepo))
 
 	if [ ! -d $(cpRepo)/inference-model ]; then \
     	mkdir -p $(cpRepo)/inference-model; \

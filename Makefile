@@ -1,5 +1,16 @@
 SHELL=/usr/bin/env bash
 
+check_python_version:
+	@python -c "import sys; \
+		if sys.version_info < (3, 10, 0): \
+			echo 'Python version is < 3.10.0'; \
+			exit 1" || (echo 'Python version meets the requirement (3.10.0 or above)')
+
+check_pip_installed:
+	@python -c "import pip" 2>/dev/null || (echo 'pip is not installed'; exit 1) || echo 'pip is installed'
+
+check: check_python_version check_pip_installed
+
 cpRepo := $(shell echo $$CP_PATH)
 
 project_name=computing-provider
@@ -11,7 +22,7 @@ GOCC?=go
 ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
 GOFLAGS+=-ldflags="$(ldflags)"
 
-build: get-model
+build: check get-model
 	rm -rf $(project_name)
 	$(GOCC) build $(GOFLAGS) -o $(project_name) main.go
 .PHONY: build
@@ -30,6 +41,7 @@ ifeq (,$(wildcard $(cpRepo)/inference-model))
 endif
 	git clone https://github.com/sonic-chain/api-inference-community.git $(cpRepo)/inference-model
 	cd $(cpRepo)/inference-model && git checkout fea-lag-code
+	pip install -r requirements.txt
 .PHONY: get-model
 
 install:

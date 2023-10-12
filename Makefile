@@ -33,7 +33,7 @@ endif
 .PHONY: get-model
 
 install:
-	install -C $(project_name) /usr/local/bin/$(project_name)
+	sudo install -C $(project_name) /usr/local/bin/$(project_name)
 
 clean:
 	rm -rf $(cpRepo)/inference-model

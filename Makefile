@@ -20,7 +20,7 @@ computing-provider: build/.get-model
 .PHONY: computing-provider
 
 build/.get-model:
-	cpRepo=$(shell env | grep CP_PATH | awk -F= '{print $$2}')
+	cpRepo=$(shell echo $$CP_PATH)
     ifeq ($(cpRepo),)
     	$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
     else

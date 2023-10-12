@@ -6,14 +6,20 @@ import sys
 import uuid
 
 
-def run(command):
+def run(command, output_file=None):
     print(" ".join(command))
-    p = subprocess.run(command)
-    if p.returncode != 0:
-        sys.exit(p.returncode)
+    try:
+        if output_file:
+            with open(output_file, "w") as f:
+                p = subprocess.run(command, stdout=f, stderr=subprocess.STDOUT, check=True)
+        else:
+            p = subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: {e}")
+        sys.exit(e.returncode)
 
 
-def build(root_dir: str, framework: str, tag: str, is_gpu: bool):
+def build(root_dir: str, framework: str, tag: str, build_log: str, is_gpu: bool):
     if tag is None:
         DEFAULT_HOSTNAME = os.getenv("DEFAULT_HOSTNAME")
         hostname = DEFAULT_HOSTNAME
@@ -24,21 +30,7 @@ def build(root_dir: str, framework: str, tag: str, is_gpu: bool):
         container_tag = tag
 
     command = ["docker", "build", f"{root_dir}/docker_images/{framework}", "-t", container_tag]
-    run(command)
-
-    # password = os.environ["REGISTRY_PASSWORD"]
-    # username = os.environ["REGISTRY_USERNAME"]
-    # command = ["echo", password]
-    # ecr_login = subprocess.Popen(command, stdout=subprocess.PIPE)
-    # docker_login = subprocess.Popen(
-    #     ["docker", "login", "-u", username, "--password-stdin", hostname],
-    #     stdin=ecr_login.stdout,
-    #     stdout=subprocess.PIPE,
-    # )
-    # docker_login.communicate()
-    #
-    # command = ["docker", "push", container_tag]
-    # run(command)
+    run(command, build_log)
     return tag
 
 
@@ -60,6 +52,11 @@ def main():
         help="Image new tag",
     )
     parser.add_argument(
+        "build_log",
+        type=str,
+        help="build log file name",
+    )
+    parser.add_argument(
         "--out",
         type=str,
         help="Where to store the new tags",
@@ -71,7 +68,7 @@ def main():
     )
     args = parser.parse_args()
 
-    tag = build(args.root_dir, args.framework, args.tag, args.gpu)
+    tag = build(args.root_dir, args.framework, args.tag, args.build_log, args.gpu)
     print(tag)
 
 

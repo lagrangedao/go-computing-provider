@@ -36,6 +36,7 @@ type Deploy struct {
 	hardwareResource  models.Resource
 	modelsSettingFile string
 	k8sNameSpace      string
+	SpacePath         string
 }
 
 func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration int64) *Deploy {
@@ -64,6 +65,11 @@ func (d *Deploy) WithYamlInfo(yamlPath string) *Deploy {
 func (d *Deploy) WithDockerfile(image, dockerfilePath string) *Deploy {
 	d.image = image
 	d.dockerfilePath = dockerfilePath
+	return d
+}
+
+func (d *Deploy) WithSpacePath(spacePath string) *Deploy {
+	d.SpacePath = spacePath
 	return d
 }
 
@@ -344,9 +350,14 @@ func (d *Deploy) ModelInferenceToK8s() error {
 	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
 	imageName := "lagrange/" + modelInfo.Framework + ":v1.0"
 
+	logFile := filepath.Join(d.SpacePath, docker.BuildFileName)
+	if _, err = os.Create(logFile); err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
-	common.StreamPythonScriptOutput(&wg, filepath.Join(basePath, "build_docker.py"), basePath, modelInfo.Framework, imageName)
+	common.StreamPythonScriptOutput(&wg, filepath.Join(basePath, "build_docker.py"), basePath, modelInfo.Framework, imageName, logFile)
 	wg.Wait()
 
 	modelEnvs := []coreV1.EnvVar{

@@ -455,6 +455,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		return ""
 	}
 
+	deploy.WithSpacePath(imagePath)
 	if len(modelsSettingFile) > 0 {
 		err := deploy.WithModelSettingFile(modelsSettingFile).ModelInferenceToK8s()
 		if err != nil {

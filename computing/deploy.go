@@ -325,7 +325,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 		return err
 	}
 
-	cpPath, _ := os.LookupEnv("")
+	cpPath, _ := os.LookupEnv("CP_PATH")
 	basePath := filepath.Join(cpPath, "inference-model")
 
 	modelInfoOut, err := common.RunPythonScript(filepath.Join(basePath, "/scripts/hf_client.py"), "model_info", modelSetting.ModelId)

@@ -37,5 +37,5 @@ install:
 
 clean:
 	rm -rf $(cpRepo)/inference-model
-	rm -rf /usr/local/bin/$(project_name)
+	sudo rm -rf /usr/local/bin/$(project_name)
 .PHONY: clean

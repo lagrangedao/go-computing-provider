@@ -130,7 +130,6 @@ func (d *Deploy) DockerfileToK8s() {
 						Env:       d.createEnv(),
 						Resources: d.createResources(),
 					}},
-					RestartPolicy: coreV1.RestartPolicyNever,
 				},
 			},
 		}}
@@ -280,10 +279,9 @@ func (d *Deploy) YamlToK8s() {
 						Namespace: d.k8sNameSpace,
 					},
 					Spec: coreV1.PodSpec{
-						NodeSelector:  generateLabel(d.hardwareResource.Gpu.Unit),
-						Containers:    containers,
-						Volumes:       volumes,
-						RestartPolicy: coreV1.RestartPolicyNever,
+						NodeSelector: generateLabel(d.hardwareResource.Gpu.Unit),
+						Containers:   containers,
+						Volumes:      volumes,
 					},
 				},
 			}}
@@ -411,7 +409,6 @@ func (d *Deploy) ModelInferenceToK8s() error {
 						Env:       d.createEnv(modelEnvs...),
 						Resources: d.createResources(),
 					}},
-					RestartPolicy: coreV1.RestartPolicyNever,
 				},
 			},
 		}}

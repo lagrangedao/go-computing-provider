@@ -1,5 +1,7 @@
 SHELL=/usr/bin/env bash
 
+cpRepo := $(shell echo $$CP_PATH)
+
 project_name=computing-provider
 
 unexport GOFLAGS
@@ -20,8 +22,7 @@ computing-provider: build/.get-model
 .PHONY: computing-provider
 
 build/.get-model:
-	cpRepo := $(shell echo $$CP_PATH)
-    ifndef cpRepo
+    ifndef $(cpRepo)
 		$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
     endif
     $(info CP_PATH is set to $(cpRepo))

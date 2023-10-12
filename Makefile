@@ -20,12 +20,11 @@ computing-provider: build/.get-model
 .PHONY: computing-provider
 
 build/.get-model:
-	cpRepo=$(shell echo $$CP_PATH)
-    ifeq ($(cpRepo),)
-    	$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
-    else
-    	$(info CP_PATH is set to $(cpRepo))
+	cpRepo := $(shell echo $$CP_PATH)
+    ifndef cpRepo
+		$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
     endif
+    $(info CP_PATH is set to $(cpRepo))
 
 	if [ ! -d $(cpRepo)/inference-model ]; then \
     	mkdir -p $(cpRepo)/inference-model; \

@@ -199,6 +199,8 @@ func (ds *DockerService) BuildImage(buildPath, imageName string) error {
 		}
 		return nil
 	})
+	logFile := filepath.Join(buildPath, BuildFileName)
+	os.Create(logFile)
 
 	dockerFileTarReader := bytes.NewReader(buf.Bytes())
 	buildResponse, err := ds.c.ImageBuild(context.Background(), dockerFileTarReader, types.ImageBuildOptions{
@@ -210,13 +212,13 @@ func (ds *DockerService) BuildImage(buildPath, imageName string) error {
 	}
 	defer buildResponse.Body.Close()
 
-	logFile, err := os.Create(filepath.Join(buildPath, BuildFileName))
+	f, _ := os.Open(logFile)
 	if err != nil {
 		return err
 	}
-	defer logFile.Close()
+	defer f.Close()
 
-	logWriters := []io.Writer{logFile, os.Stdout}
+	logWriters := []io.Writer{f, os.Stdout}
 	multiWriter := io.MultiWriter(logWriters...)
 
 	_, err = io.Copy(multiWriter, buildResponse.Body)

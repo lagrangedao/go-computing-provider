@@ -343,6 +343,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
 		if _, err := os.Stat(buildLogPath); err != nil {
+			logs.GetLogger().Errorf("not found build log file: %s", buildLogPath)
 			return
 		}
 		logFile, _ := os.Open(buildLogPath)

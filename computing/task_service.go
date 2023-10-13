@@ -103,6 +103,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 		logs.GetLogger().Debugf("report job status Failed. uuid: %s, status: %s", jobUuid, jobStatus)
 		return
 	}
+	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
 	return
 }
 

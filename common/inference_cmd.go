@@ -12,7 +12,7 @@ import (
 func StreamPythonScriptOutput(wg *sync.WaitGroup, scriptPath ...string) {
 	defer wg.Done()
 
-	cmd := exec.Command("python", scriptPath...)
+	cmd := exec.Command("python3", scriptPath...)
 	fmt.Println(cmd.String())
 	stdoutPipe, _ := cmd.StdoutPipe()
 	stderrPipe, _ := cmd.StderrPipe()
@@ -47,7 +47,7 @@ func StreamPythonScriptOutput(wg *sync.WaitGroup, scriptPath ...string) {
 }
 
 func RunPythonScript(scriptPath ...string) (string, error) {
-	cmd := exec.Command("python", scriptPath...)
+	cmd := exec.Command("python3", scriptPath...)
 	fmt.Println(cmd.String())
 	output, err := cmd.Output()
 	if err != nil {

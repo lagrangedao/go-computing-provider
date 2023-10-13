@@ -345,6 +345,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
 		if _, err := os.Stat(buildLogPath); err != nil {
+			logs.GetLogger().Errorf("not found build log file: %s", buildLogPath)
 			return
 		}
 		logFile, _ := os.Open(buildLogPath)
@@ -429,6 +430,20 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	spaceName := spaceJson.Data.Space.Name
 	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
+
+	conn := redisPool.Get()
+	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + spaceUuid}
+	fields := map[string]string{
+		"wallet_address": walletAddress,
+		"space_name":     spaceName,
+		"expire_time":    strconv.Itoa(int(time.Now().Unix()) + duration),
+		"space_uuid":     spaceUuid,
+	}
+
+	for key, val := range fields {
+		fullArgs = append(fullArgs, key, val)
+	}
+	_, _ = conn.Do("HSET", fullArgs...)
 
 	logs.GetLogger().Infof("uuid: %s, spaceName: %s, hardwareName: %s", spaceUuid, spaceName, spaceHardware.Description)
 	if len(spaceHardware.Description) == 0 {

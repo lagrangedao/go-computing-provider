@@ -29,23 +29,26 @@ func NewScheduleTask() *ScheduleTask {
 }
 
 func (s *ScheduleTask) Run() {
+	go func() {
+		for job := range deployingChan {
+			s.TaskMap.Store(job.Uuid, &job)
+		}
+	}()
+
 	for {
 		select {
-		case job := <-deployingChan:
-			s.TaskMap.Store(job.Uuid, job)
-
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
 				jobUuid := key.(string)
-				job := value.(models.Job)
+				job := value.(*models.Job)
 				reportJobStatus(jobUuid, job.Status)
 				return true
 			})
 		case <-time.After(10 * time.Minute):
 			s.TaskMap.Range(func(key, value any) bool {
-				job := value.(models.Job)
+				job := value.(*models.Job)
 				job.Count++
-
+				s.TaskMap.Store(job.Uuid, job)
 				if job.Count > 20 {
 					s.TaskMap.Delete(job.Uuid)
 					return true
@@ -70,7 +73,7 @@ func (s *ScheduleTask) Run() {
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -79,7 +82,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	payload, err := json.Marshal(reqParam)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
-		return false
+		return
 	}
 
 	client := &http.Client{}
@@ -87,7 +90,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
-		return false
+		return
 	}
 	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
@@ -95,15 +98,15 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
-		return false
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return true
+		logs.GetLogger().Infof("report job status Failed. uuid: %s, status: %s", jobUuid, jobStatus)
+		return
 	}
-	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
-	return true
+	return
 }
 
 func RunSyncTask() {

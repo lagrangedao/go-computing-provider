@@ -166,7 +166,7 @@ type Service struct {
 		Name string `yaml:"name"`
 		Path string `yaml:"path"`
 	} `yaml:"config"`
-	ReadyCmd     []string `yaml:"ready-cmd"`
+	ReadyCmd []string        `yaml:"ready-cmd"`
 	Models   []ModelResource `yaml:"models"`
 }
 

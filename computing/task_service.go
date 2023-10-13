@@ -102,7 +102,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	if resp.StatusCode != http.StatusOK {
 		return true
 	}
-	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
 	return true
 }
 

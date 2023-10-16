@@ -31,6 +31,7 @@ func main() {
 				EnvVars: []string{"CP_PATH"},
 				Usage:   "cp repo path",
 				Value:   "~/.swan/computing",
+				Hidden:  true,
 			},
 		},
 		Commands: []*cli.Command{

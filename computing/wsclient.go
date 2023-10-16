@@ -2,7 +2,6 @@ package computing
 
 import (
 	"bufio"
-	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/gorilla/websocket"
 	"io"
 	"net/http"
@@ -95,7 +94,6 @@ func (ws *WsClient) HandleLogs(reader io.Reader) {
 				data:    []byte(delN),
 				msgType: websocket.TextMessage,
 			}
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
@@ -104,7 +102,7 @@ func (ws *WsClient) writeMessage() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logs.GetLogger().Error(err)
+				return
 			}
 		}()
 
@@ -128,7 +126,7 @@ func (ws *WsClient) readMessage() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				logs.GetLogger().Error(err)
+				return
 			}
 		}()
 		for {

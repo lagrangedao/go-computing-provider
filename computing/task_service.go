@@ -18,7 +18,7 @@ import (
 )
 
 var runTaskGpuResource sync.Map
-var deployingChan = make(chan models.Job, 10)
+var deployingChan = make(chan models.Job)
 
 type ScheduleTask struct {
 	TaskMap sync.Map
@@ -29,24 +29,56 @@ func NewScheduleTask() *ScheduleTask {
 }
 
 func (s *ScheduleTask) Run() {
+	go func() {
+		ticker := time.NewTicker(3 * time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				s.TaskMap.Range(func(key, value any) bool {
+					job := value.(*models.Job)
+					job.Count++
+					s.TaskMap.Store(job.Uuid, job)
+
+					if job.Count > 50 {
+						s.TaskMap.Delete(job.Uuid)
+						return true
+					}
+
+					if job.Status != models.JobDeployToK8s {
+						return true
+					}
+
+					response, err := http.Get(job.Url)
+					if err != nil {
+						return true
+					}
+					defer response.Body.Close()
+
+					if response.StatusCode == 200 {
+						s.TaskMap.Delete(job.Uuid)
+					}
+					return true
+				})
+			}
+		}
+	}()
+
 	for {
 		select {
 		case job := <-deployingChan:
-			s.TaskMap.Store(job.Uuid+"###"+string(job.Status), job.Status)
+			s.TaskMap.Store(job.Uuid, &job)
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
-				jobUuid := strings.Split(key.(string), "###")[0]
-				jobStatus := value.(models.JobStatus)
-				if flag := reportJobStatus(jobUuid, jobStatus); flag {
-					s.TaskMap.Delete(key)
-				}
+				jobUuid := key.(string)
+				job := value.(*models.Job)
+				reportJobStatus(jobUuid, job.Status)
 				return true
 			})
 		}
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -55,7 +87,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	payload, err := json.Marshal(reqParam)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
-		return false
+		return
 	}
 
 	client := &http.Client{}
@@ -63,7 +95,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
-		return false
+		return
 	}
 	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
@@ -71,15 +103,14 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
-		return false
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return true
+		return
 	}
-	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
-	return true
+	return
 }
 
 func RunSyncTask() {
@@ -243,10 +274,12 @@ func watchExpiredTask() {
 					expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
 					logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spaceUuid: %s,expireTime: %s. the job starting terminated", key, namespace, jobMetadata.SpaceUuid, expireTimeStr)
 
-					deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName)
+					err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName)
+					if err != nil {
+						continue
+					}
 					deleteKey = append(deleteKey, key)
 				}
-
 			}
 			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
 			if len(deleteKey) > 0 {

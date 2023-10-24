@@ -29,8 +29,7 @@ ifeq (,$(wildcard $(cpRepo)/inference-model))
 	mkdir -p $(cpRepo)/inference-model
 endif
 	git clone https://github.com/lagrangedao/api-inference-community.git $(cpRepo)/inference-model
-	cd $(cpRepo)/inference-model && git checkout fea-lag-transformer
-	pip install -r requirements.txt
+	cd $(cpRepo)/inference-model && git checkout fea-lag-transformer && pip install -r requirements.txt
 .PHONY: get-model
 
 install:

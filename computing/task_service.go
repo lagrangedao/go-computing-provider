@@ -18,7 +18,7 @@ import (
 )
 
 var runTaskGpuResource sync.Map
-var deployingChan = make(chan models.Job, 10)
+var deployingChan = make(chan models.Job)
 
 type ScheduleTask struct {
 	TaskMap sync.Map
@@ -29,41 +29,49 @@ func NewScheduleTask() *ScheduleTask {
 }
 
 func (s *ScheduleTask) Run() {
+	go func() {
+		ticker := time.NewTicker(3 * time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				s.TaskMap.Range(func(key, value any) bool {
+					job := value.(*models.Job)
+					job.Count++
+					s.TaskMap.Store(job.Uuid, job)
+
+					if job.Count > 50 {
+						s.TaskMap.Delete(job.Uuid)
+						return true
+					}
+
+					if job.Status != models.JobDeployToK8s {
+						return true
+					}
+
+					response, err := http.Get(job.Url)
+					if err != nil {
+						return true
+					}
+					defer response.Body.Close()
+
+					if response.StatusCode == 200 {
+						s.TaskMap.Delete(job.Uuid)
+					}
+					return true
+				})
+			}
+		}
+	}()
+
 	for {
 		select {
 		case job := <-deployingChan:
-			s.TaskMap.Store(job.Uuid, job)
-
+			s.TaskMap.Store(job.Uuid, &job)
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
 				jobUuid := key.(string)
-				job := value.(models.Job)
+				job := value.(*models.Job)
 				reportJobStatus(jobUuid, job.Status)
-				return true
-			})
-		case <-time.After(10 * time.Minute):
-			s.TaskMap.Range(func(key, value any) bool {
-				job := value.(models.Job)
-				job.Count++
-
-				if job.Count > 20 {
-					s.TaskMap.Delete(job.Uuid)
-					return true
-				}
-
-				if job.Status != models.JobDeployToK8s {
-					return true
-				}
-
-				response, err := http.Get(job.Url)
-				if err != nil {
-					return true
-				}
-				defer response.Body.Close()
-
-				if response.StatusCode == 200 {
-					s.TaskMap.Delete(job.Uuid)
-				}
 				return true
 			})
 		}
@@ -100,7 +108,6 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		logs.GetLogger().Debugf("report job status Failed. uuid: %s, status: %s", jobUuid, jobStatus)
 		return
 	}
 	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)

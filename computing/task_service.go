@@ -267,7 +267,7 @@ func watchExpiredTask() {
 						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
 						return
 					}
-					logs.GetLogger().Errorf("test-time: key: %s, current: %d, expireTime: %d, result: %t", key, time.Now().Unix(), jobMetadata.ExpireTime, time.Now().Unix() > jobMetadata.ExpireTime)
+
 					if time.Now().Unix() > jobMetadata.ExpireTime {
 						namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
 						expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")

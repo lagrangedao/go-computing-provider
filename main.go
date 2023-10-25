@@ -51,6 +51,7 @@ var runCmd = &cli.Command{
 		logs.GetLogger().Info("Start in computing provider mode.")
 
 		cpRepoPath := cctx.String(FlagCpRepo)
+		os.Setenv("CP_PATH", cpRepoPath)
 		initializer.ProjectInit(cpRepoPath)
 
 		r := gin.Default()

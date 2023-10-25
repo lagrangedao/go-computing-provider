@@ -1,5 +1,6 @@
 [API]
 Port = 8085                                     # The port number that the web server listens on
+WssPort = 8086
 MultiAddress = "/ip4/<public_ip>/tcp/<port>"    # The multiAddress for libp2p
 Domain = ""                                     # The domain name
 NodeName = ""                                   # The computing-provider node name

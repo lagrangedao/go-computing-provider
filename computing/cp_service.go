@@ -343,6 +343,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 	if logType == "build" {
 		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
 		if _, err := os.Stat(buildLogPath); err != nil {
+			logs.GetLogger().Errorf("not found build log file: %s", buildLogPath)
 			return
 		}
 		logFile, _ := os.Open(buildLogPath)
@@ -363,8 +364,10 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 		}
 
 		if len(pods.Items) > 0 {
+			containerStatuses := pods.Items[0].Status.ContainerStatuses
+			lastIndex := len(containerStatuses) - 1
 			req := k8sService.k8sClient.CoreV1().Pods(k8sNameSpace).GetLogs(pods.Items[0].Name, &v1.PodLogOptions{
-				Container:  "",
+				Container:  containerStatuses[lastIndex].Name,
 				Follow:     true,
 				Timestamps: true,
 			})
@@ -428,6 +431,20 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
 
+	conn := redisPool.Get()
+	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + spaceUuid}
+	fields := map[string]string{
+		"wallet_address": walletAddress,
+		"space_name":     spaceName,
+		"expire_time":    strconv.Itoa(int(time.Now().Unix()) + duration),
+		"space_uuid":     spaceUuid,
+	}
+
+	for key, val := range fields {
+		fullArgs = append(fullArgs, key, val)
+	}
+	_, _ = conn.Do("HSET", fullArgs...)
+
 	logs.GetLogger().Infof("uuid: %s, spaceName: %s, hardwareName: %s", spaceUuid, spaceName, spaceHardware.Description)
 	if len(spaceHardware.Description) == 0 {
 		return ""
@@ -449,10 +466,20 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
 	os.RemoveAll(spacePath)
 	updateJobStatus(jobUuid, models.JobDownloadSource)
-	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
+	containsYaml, yamlPath, imagePath, modelsSettingFile, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return ""
+	}
+
+	deploy.WithSpacePath(imagePath)
+	if len(modelsSettingFile) > 0 {
+		err := deploy.WithModelSettingFile(modelsSettingFile).ModelInferenceToK8s()
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return ""
+		}
+		return hostName
 	}
 
 	if containsYaml {
@@ -464,7 +491,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	return hostName
 }
 
-func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
+func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) error {
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceUuid
 	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceUuid
@@ -472,13 +499,13 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 	k8sService := NewK8sService()
 	if err := k8sService.DeleteIngress(context.TODO(), namespace, ingressName); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete ingress, ingressName: %s, error: %+v", deployName, err)
-		return
+		return err
 	}
 	logs.GetLogger().Infof("Deleted ingress %s finished", ingressName)
 
 	if err := k8sService.DeleteService(context.TODO(), namespace, serviceName); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete service, serviceName: %s, error: %+v", serviceName, err)
-		return
+		return err
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", serviceName)
 
@@ -486,7 +513,7 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 	deployImageIds, err := k8sService.GetDeploymentImages(context.TODO(), namespace, deployName)
 	if err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed get deploy imageIds, deployName: %s, error: %+v", deployName, err)
-		return
+		return err
 	}
 	for _, imageId := range deployImageIds {
 		dockerService.RemoveImage(imageId)
@@ -494,19 +521,19 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 
 	if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete deployment, deployName: %s, error: %+v", deployName, err)
-		return
+		return err
 	}
 	time.Sleep(6 * time.Second)
 	logs.GetLogger().Infof("Deleted deployment %s finished", deployName)
 
 	if err := k8sService.DeleteDeployRs(context.TODO(), namespace, spaceUuid); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete ReplicaSetsController, spaceUuid: %s, error: %+v", spaceUuid, err)
-		return
+		return err
 	}
 
 	if err := k8sService.DeletePod(context.TODO(), namespace, spaceUuid); err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed delete pods, spaceUuid: %s, error: %+v", spaceUuid, err)
-		return
+		return err
 	}
 
 	ticker := time.NewTicker(3 * time.Second)
@@ -528,6 +555,7 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) {
 			break
 		}
 	}
+	return nil
 }
 
 func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
@@ -544,11 +572,22 @@ func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
 	}
 }
 
-func updateJobStatus(jobUuid string, jobStatus models.JobStatus) {
+func updateJobStatus(jobUuid string, jobStatus models.JobStatus, url ...string) {
 	go func() {
-		deployingChan <- models.Job{
-			Uuid:   jobUuid,
-			Status: jobStatus,
+		if len(url) > 0 {
+			deployingChan <- models.Job{
+				Uuid:   jobUuid,
+				Status: jobStatus,
+				Count:  0,
+				Url:    url[0],
+			}
+		} else {
+			deployingChan <- models.Job{
+				Uuid:   jobUuid,
+				Status: jobStatus,
+				Count:  0,
+				Url:    "",
+			}
 		}
 	}()
 }

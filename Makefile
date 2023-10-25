@@ -1,13 +1,8 @@
 SHELL=/usr/bin/env bash
 
-project_name=computing-provider
+cpRepo := $(shell echo $$CP_PATH)
 
-cpRepo=$(shell env | grep CP_PATH | awk -F= '{print $$2}')
-ifeq ($(cpRepo),)
-$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
-else
-$(info CP_PATH is set to $(cpRepo))
-endif
+project_name=computing-provider
 
 unexport GOFLAGS
 
@@ -16,18 +11,31 @@ GOCC?=go
 ldflags=-X=main.CurrentCommit=+git.$(subst -,.,$(shell git describe --always --match=NeVeRmAtCh --dirty 2>/dev/null || git rev-parse --short HEAD 2>/dev/null))
 GOFLAGS+=-ldflags="$(ldflags)"
 
-build/.get-model:
-	git clone https://github.com/FogMeta/api-inference-community.git $(cpRepo)/inference-model
-
-build: build/.get-model
+build: get-model
 	rm -rf $(project_name)
 	$(GOCC) build $(GOFLAGS) -o $(project_name) main.go
 .PHONY: build
 
+check_path:
+ifeq ($(cpRepo),)
+$(error CP_PATH is not set. Please set it using: export CP_PATH=xxx)
+else
+$(info CP_PATH is set to $(cpRepo))
+endif
+.PHONY: check_path
+
+get-model: check_path
+ifeq (,$(wildcard $(cpRepo)/inference-model))
+	mkdir -p $(cpRepo)/inference-model
+endif
+	git clone https://github.com/lagrangedao/api-inference-community.git $(cpRepo)/inference-model
+	cd $(cpRepo)/inference-model && git checkout fea-lag-transformer && pip install -r requirements.txt
+.PHONY: get-model
+
 install:
-	install -C $(project_name) /usr/local/bin/$(project_name)
+	sudo install -C $(project_name) /usr/local/bin/$(project_name)
 
 clean:
 	rm -rf $(cpRepo)/inference-model
-	rm -rf /usr/local/bin/$(project_name)
+	sudo rm -rf /usr/local/bin/$(project_name)
 .PHONY: clean

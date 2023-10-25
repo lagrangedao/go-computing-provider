@@ -19,17 +19,17 @@ import (
 
 var NotFoundError = errors.New("not found resource")
 
-func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, string, string, error) {
+func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, string, string, string, error) {
 	var err error
 	buildFolder := "build/"
 	if len(files) > 0 {
 		for _, file := range files {
 			dirPath := filepath.Dir(file.Name)
 			if err = os.MkdirAll(filepath.Join(buildFolder, dirPath), os.ModePerm); err != nil {
-				return false, "", "", err
+				return false, "", "", "", err
 			}
 			if err = downloadFile(filepath.Join(buildFolder, file.Name), file.URL); err != nil {
-				return false, "", "", fmt.Errorf("error downloading file: %w", err)
+				return false, "", "", "", fmt.Errorf("error downloading file: %w", err)
 			}
 			logs.GetLogger().Infof("Download %s successfully.", spaceUuid)
 		}
@@ -37,23 +37,26 @@ func BuildSpaceTaskImage(spaceUuid string, files []models.SpaceFile) (bool, stri
 		imagePath := filepath.Join(buildFolder, getDownloadPath(files[0].Name))
 		var containsYaml bool
 		var yamlPath string
+		var modelsSetting string
 
 		err = filepath.WalkDir(imagePath, func(path string, d fs.DirEntry, err error) error {
 			if strings.HasSuffix(d.Name(), "deploy.yaml") || strings.HasSuffix(d.Name(), "deploy.yml") {
 				containsYaml = true
 				yamlPath = path
-				return filepath.SkipDir
+			}
+			if strings.EqualFold(d.Name(), "model-setting.json") {
+				modelsSetting = path
 			}
 			return nil
 		})
 		if err != nil {
-			return containsYaml, yamlPath, imagePath, err
+			return containsYaml, yamlPath, imagePath, modelsSetting, err
 		}
-		return containsYaml, yamlPath, imagePath, nil
+		return containsYaml, yamlPath, imagePath, modelsSetting, nil
 	} else {
 		logs.GetLogger().Warnf("Space %s is not found.", spaceUuid)
 	}
-	return false, "", "", NotFoundError
+	return false, "", "", "", NotFoundError
 }
 
 func getDownloadPath(fileName string) string {

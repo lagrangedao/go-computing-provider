@@ -18,7 +18,7 @@ import (
 )
 
 var runTaskGpuResource sync.Map
-var deployingChan = make(chan models.Job, 10)
+var deployingChan = make(chan models.Job)
 
 type ScheduleTask struct {
 	TaskMap sync.Map
@@ -29,24 +29,56 @@ func NewScheduleTask() *ScheduleTask {
 }
 
 func (s *ScheduleTask) Run() {
+	go func() {
+		ticker := time.NewTicker(3 * time.Minute)
+		for {
+			select {
+			case <-ticker.C:
+				s.TaskMap.Range(func(key, value any) bool {
+					job := value.(*models.Job)
+					job.Count++
+					s.TaskMap.Store(job.Uuid, job)
+
+					if job.Count > 50 {
+						s.TaskMap.Delete(job.Uuid)
+						return true
+					}
+
+					if job.Status != models.JobDeployToK8s {
+						return true
+					}
+
+					response, err := http.Get(job.Url)
+					if err != nil {
+						return true
+					}
+					defer response.Body.Close()
+
+					if response.StatusCode == 200 {
+						s.TaskMap.Delete(job.Uuid)
+					}
+					return true
+				})
+			}
+		}
+	}()
+
 	for {
 		select {
 		case job := <-deployingChan:
-			s.TaskMap.Store(job.Uuid+"###"+string(job.Status), job.Status)
+			s.TaskMap.Store(job.Uuid, &job)
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
-				jobUuid := strings.Split(key.(string), "###")[0]
-				jobStatus := value.(models.JobStatus)
-				if flag := reportJobStatus(jobUuid, jobStatus); flag {
-					s.TaskMap.Delete(key)
-				}
+				jobUuid := key.(string)
+				job := value.(*models.Job)
+				reportJobStatus(jobUuid, job.Status)
 				return true
 			})
 		}
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
+func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -55,7 +87,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	payload, err := json.Marshal(reqParam)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed convert to json, error: %+v", err)
-		return false
+		return
 	}
 
 	client := &http.Client{}
@@ -63,7 +95,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
-		return false
+		return
 	}
 	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
@@ -71,15 +103,16 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) bool {
 	resp, err := client.Do(req)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed send a request, error: %+v", err)
-		return false
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return true
+		return
 	}
-	logs.GetLogger().Infof("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
-	return true
+
+	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
+	return
 }
 
 func RunSyncTask(nodeId string) {
@@ -213,78 +246,78 @@ func reportClusterResource(location, nodeId string) {
 func watchExpiredTask() {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logs.GetLogger().Errorf("catch panic error: %+v", err)
-			}
-		}()
-
 		var deleteKey []string
 		for range ticker.C {
-			conn := redisPool.Get()
-
-			prefix := constants.REDIS_FULL_PREFIX + "*"
-			keys, err := redis.Strings(conn.Do("KEYS", prefix))
-			if err != nil {
-				logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
-				return
-			}
-			for _, key := range keys {
-				jobMetadata, err := retrieveJobMetadata(key)
+			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						logs.GetLogger().Errorf("catch panic error: %+v", err)
+					}
+				}()
+				conn := redisPool.Get()
+				prefix := constants.REDIS_FULL_PREFIX + "*"
+				keys, err := redis.Strings(conn.Do("KEYS", prefix))
 				if err != nil {
-					logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
+					logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
 					return
 				}
+				for _, key := range keys {
+					jobMetadata, err := retrieveJobMetadata(key)
+					if err != nil {
+						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
+						return
+					}
 
-				if time.Now().Unix() > jobMetadata.ExpireTime {
-					namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
-					expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
-					logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spaceUuid: %s,expireTime: %s. the job starting terminated", key, namespace, jobMetadata.SpaceUuid, expireTimeStr)
-
-					deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName)
-					deleteKey = append(deleteKey, key)
+					if time.Now().Unix() > jobMetadata.ExpireTime {
+						namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
+						expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
+						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s,expireTime: %s. the job starting terminated", key, namespace, expireTimeStr)
+						if err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName); err == nil {
+							deleteKey = append(deleteKey, key)
+						}
+					}
 				}
-
-			}
-			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
-			if len(deleteKey) > 0 {
-				logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
-				deleteKey = nil
-			}
+				conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
+				if len(deleteKey) > 0 {
+					logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
+					deleteKey = nil
+				}
+			}()
 		}
 	}()
 }
 
 func watchNameSpaceForDeleted() {
-	ticker := time.NewTicker(20 * time.Hour)
+	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logs.GetLogger().Errorf("catch panic error: %+v", err)
-			}
-		}()
-
 		for range ticker.C {
-			service := NewK8sService()
-			namespaces, err := service.ListNamespace(context.TODO())
-			if err != nil {
-				logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
-				continue
-			}
-
-			for _, namespace := range namespaces {
-				getPods, err := service.GetPods(namespace, "")
+			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						logs.GetLogger().Errorf("catch panic error: %+v", err)
+					}
+				}()
+				service := NewK8sService()
+				namespaces, err := service.ListNamespace(context.TODO())
 				if err != nil {
-					logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
-					continue
+					logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
+					return
 				}
-				if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
-					if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
-						logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+
+				for _, namespace := range namespaces {
+					getPods, err := service.GetPods(namespace, "")
+					if err != nil {
+						logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+						continue
+					}
+					if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
+						if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
+							logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+						}
 					}
 				}
-			}
-			docker.NewDockerService().CleanResource()
+				docker.NewDockerService().CleanResource()
+			}()
 		}
 	}()
 }

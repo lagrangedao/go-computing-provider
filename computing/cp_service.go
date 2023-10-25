@@ -83,7 +83,7 @@ func ReceiveJob(c *gin.Context) {
 	if err = submitJob(&jobData); err != nil {
 		jobData.JobResultURI = ""
 	}
-	updateJobStatus(jobData.UUID, models.JobUploadResult)
+
 	c.JSON(http.StatusOK, jobData)
 }
 
@@ -116,8 +116,7 @@ func submitJob(jobData *models.JobData) error {
 		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
 		return err
 	}
-	mcsFileJson, _ := json.Marshal(mcsOssFile)
-	logs.GetLogger().Printf("Job submitted to IPFS %s", string(mcsFileJson))
+	logs.GetLogger().Infof("jobuuid: %s successfully submitted to IPFS", jobData.UUID)
 
 	gatewayUrl, err := storageService.GetGatewayUrl()
 	if err != nil {
@@ -189,8 +188,6 @@ func RedeployJob(c *gin.Context) {
 	jobData.JobResultURI = fmt.Sprintf("https://%s", hostName)
 	if err = submitJob(&jobData); err != nil {
 		jobData.JobResultURI = ""
-	} else {
-		updateJobStatus(jobData.UUID, models.JobUploadResult)
 	}
 	c.JSON(http.StatusOK, jobData)
 }
@@ -385,6 +382,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 }
 
 func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
+	updateJobStatus(jobUuid, models.JobUploadResult)
 	defer func() {
 		if err := recover(); err != nil {
 			logs.GetLogger().Errorf("deploy space task painc, error: %+v", err)

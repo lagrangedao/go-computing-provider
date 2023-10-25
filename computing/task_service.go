@@ -287,35 +287,36 @@ func watchExpiredTask() {
 }
 
 func watchNameSpaceForDeleted() {
-	ticker := time.NewTicker(20 * time.Hour)
+	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logs.GetLogger().Errorf("catch panic error: %+v", err)
-			}
-		}()
-
 		for range ticker.C {
-			service := NewK8sService()
-			namespaces, err := service.ListNamespace(context.TODO())
-			if err != nil {
-				logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
-				continue
-			}
-
-			for _, namespace := range namespaces {
-				getPods, err := service.GetPods(namespace, "")
+			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						logs.GetLogger().Errorf("catch panic error: %+v", err)
+					}
+				}()
+				service := NewK8sService()
+				namespaces, err := service.ListNamespace(context.TODO())
 				if err != nil {
-					logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
-					continue
+					logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
+					return
 				}
-				if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
-					if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
-						logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+
+				for _, namespace := range namespaces {
+					getPods, err := service.GetPods(namespace, "")
+					if err != nil {
+						logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+						continue
+					}
+					if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
+						if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
+							logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+						}
 					}
 				}
-			}
-			docker.NewDockerService().CleanResource()
+				docker.NewDockerService().CleanResource()
+			}()
 		}
 	}()
 }

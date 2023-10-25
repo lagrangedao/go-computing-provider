@@ -248,7 +248,6 @@ func watchExpiredTask() {
 	go func() {
 		var deleteKey []string
 		for range ticker.C {
-			logs.GetLogger().Infof("<timer-task> start scheduling")
 			go func() {
 				defer func() {
 					if err := recover(); err != nil {
@@ -268,13 +267,14 @@ func watchExpiredTask() {
 						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
 						return
 					}
+
 					if time.Now().Unix() > jobMetadata.ExpireTime {
 						namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
 						expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
 						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s,expireTime: %s. the job starting terminated", key, namespace, expireTimeStr)
-
-						deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName)
-						deleteKey = append(deleteKey, key)
+						if err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName); err == nil {
+							deleteKey = append(deleteKey, key)
+						}
 					}
 				}
 				conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)

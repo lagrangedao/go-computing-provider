@@ -246,80 +246,78 @@ func reportClusterResource(location, nodeId string) {
 func watchExpiredTask() {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logs.GetLogger().Errorf("catch panic error: %+v", err)
-			}
-		}()
-
 		var deleteKey []string
 		for range ticker.C {
-			conn := redisPool.Get()
-
-			prefix := constants.REDIS_FULL_PREFIX + "*"
-			keys, err := redis.Strings(conn.Do("KEYS", prefix))
-			if err != nil {
-				logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
-				return
-			}
-			for _, key := range keys {
-				jobMetadata, err := retrieveJobMetadata(key)
+			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						logs.GetLogger().Errorf("catch panic error: %+v", err)
+					}
+				}()
+				conn := redisPool.Get()
+				prefix := constants.REDIS_FULL_PREFIX + "*"
+				keys, err := redis.Strings(conn.Do("KEYS", prefix))
 				if err != nil {
-					logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
+					logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
 					return
 				}
-
-				if time.Now().Unix() > jobMetadata.ExpireTime {
-					namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
-					expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
-					logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s, spaceUuid: %s,expireTime: %s. the job starting terminated", key, namespace, jobMetadata.SpaceUuid, expireTimeStr)
-
-					err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName)
+				for _, key := range keys {
+					jobMetadata, err := retrieveJobMetadata(key)
 					if err != nil {
-						continue
+						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
+						return
 					}
-					deleteKey = append(deleteKey, key)
+
+					if time.Now().Unix() > jobMetadata.ExpireTime {
+						namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
+						expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
+						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s,expireTime: %s. the job starting terminated", key, namespace, expireTimeStr)
+						if err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName); err == nil {
+							deleteKey = append(deleteKey, key)
+						}
+					}
 				}
-			}
-			conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
-			if len(deleteKey) > 0 {
-				logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
-				deleteKey = nil
-			}
+				conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
+				if len(deleteKey) > 0 {
+					logs.GetLogger().Infof("Delete redis keys finished, keys: %+v", deleteKey)
+					deleteKey = nil
+				}
+			}()
 		}
 	}()
 }
 
 func watchNameSpaceForDeleted() {
-	ticker := time.NewTicker(20 * time.Hour)
+	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logs.GetLogger().Errorf("catch panic error: %+v", err)
-			}
-		}()
-
 		for range ticker.C {
-			service := NewK8sService()
-			namespaces, err := service.ListNamespace(context.TODO())
-			if err != nil {
-				logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
-				continue
-			}
-
-			for _, namespace := range namespaces {
-				getPods, err := service.GetPods(namespace, "")
+			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						logs.GetLogger().Errorf("catch panic error: %+v", err)
+					}
+				}()
+				service := NewK8sService()
+				namespaces, err := service.ListNamespace(context.TODO())
 				if err != nil {
-					logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
-					continue
+					logs.GetLogger().Errorf("Failed get all namespace, error: %+v", err)
+					return
 				}
-				if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
-					if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
-						logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+
+				for _, namespace := range namespaces {
+					getPods, err := service.GetPods(namespace, "")
+					if err != nil {
+						logs.GetLogger().Errorf("Failed get pods form namespace,namepace: %s, error: %+v", namespace, err)
+						continue
+					}
+					if !getPods && strings.HasPrefix(namespace, constants.K8S_NAMESPACE_NAME_PREFIX) {
+						if err = service.DeleteNameSpace(context.TODO(), namespace); err != nil {
+							logs.GetLogger().Errorf("Failed delete namespace, namepace: %s, error: %+v", namespace, err)
+						}
 					}
 				}
-			}
-			docker.NewDockerService().CleanResource()
+				docker.NewDockerService().CleanResource()
+			}()
 		}
 	}()
 }

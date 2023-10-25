@@ -110,6 +110,7 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	if resp.StatusCode != http.StatusOK {
 		return
 	}
+
 	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
 	return
 }

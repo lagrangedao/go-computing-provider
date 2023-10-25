@@ -52,7 +52,6 @@ var runCmd = &cli.Command{
 
 		cpRepoPath := cctx.String(FlagCpRepo)
 		os.Setenv("CP_PATH", cpRepoPath)
-
 		initializer.ProjectInit(cpRepoPath)
 
 		r := gin.Default()

@@ -60,7 +60,7 @@ func (ws *WsClient) Close() {
 func (ws *WsClient) HandleLogs(reader io.Reader) {
 	defer func() {
 		if err := recover(); err != nil {
-			logs.GetLogger().Error(err)
+			return
 		}
 	}()
 

@@ -300,6 +300,7 @@ func (d *Deploy) YamlToK8s() {
 			logs.GetLogger().Error(err)
 			return
 		}
+    
 		updateJobStatus(d.jobUuid, models.JobDeployToK8s, "https://"+d.hostName)
 
 		if len(cr.Models) > 0 {
@@ -309,7 +310,6 @@ func (d *Deploy) YamlToK8s() {
 				}(res)
 			}
 		}
-
 		d.watchContainerRunningTime()
 	}
 }
@@ -554,7 +554,7 @@ func (d *Deploy) watchContainerRunningTime() {
 		fullArgs = append(fullArgs, key, val)
 	}
 	_, _ = conn.Do("HSET", fullArgs...)
-
+  
 }
 
 func getHardwareDetail(description string) models.Resource {

@@ -1,4 +1,4 @@
-package common
+package util
 
 import (
 	libconstants "github.com/filswan/go-swan-lib/constants"

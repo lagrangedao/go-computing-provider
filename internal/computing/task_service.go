@@ -8,8 +8,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/models"
+	models2 "github.com/lagrangedao/go-computing-provider/internal/models"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strings"
@@ -18,7 +17,7 @@ import (
 )
 
 var runTaskGpuResource sync.Map
-var deployingChan = make(chan models.Job)
+var deployingChan = make(chan models2.Job)
 
 type ScheduleTask struct {
 	TaskMap sync.Map
@@ -35,7 +34,7 @@ func (s *ScheduleTask) Run() {
 			select {
 			case <-ticker.C:
 				s.TaskMap.Range(func(key, value any) bool {
-					job := value.(*models.Job)
+					job := value.(*models2.Job)
 					job.Count++
 					s.TaskMap.Store(job.Uuid, job)
 
@@ -44,7 +43,7 @@ func (s *ScheduleTask) Run() {
 						return true
 					}
 
-					if job.Status != models.JobDeployToK8s {
+					if job.Status != models2.JobDeployToK8s {
 						return true
 					}
 
@@ -70,7 +69,7 @@ func (s *ScheduleTask) Run() {
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
 				jobUuid := key.(string)
-				job := value.(*models.Job)
+				job := value.(*models2.Job)
 				reportJobStatus(jobUuid, job.Status)
 				return true
 			})
@@ -78,7 +77,7 @@ func (s *ScheduleTask) Run() {
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
+func reportJobStatus(jobUuid string, jobStatus models2.JobStatus) {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -135,7 +134,7 @@ func RunSyncTask(nodeId string) {
 			cpNode := node
 			if gpu, ok := nodeGpuInfoMap[cpNode.Name]; ok {
 				var gpuInfo struct {
-					Gpu models.Gpu `json:"gpu"`
+					Gpu models2.Gpu `json:"gpu"`
 				}
 				if err = json.Unmarshal([]byte(gpu.String()), &gpuInfo); err != nil {
 					logs.GetLogger().Errorf("convert to json, nodeName %s, error: %+v", cpNode.Name, err)
@@ -181,7 +180,7 @@ func RunSyncTask(nodeId string) {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 
-		logs.GetLogger().Infof("provider status: %s", models.ActiveStatus)
+		logs.GetLogger().Infof("provider status: %s", models2.ActiveStatus)
 
 		for range ticker.C {
 			providerStatus, err := checkClusterProviderStatus()
@@ -189,7 +188,7 @@ func RunSyncTask(nodeId string) {
 				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
 				return
 			}
-			if providerStatus == models.InactiveStatus {
+			if providerStatus == models2.InactiveStatus {
 				logs.GetLogger().Infof("provider status: %s", providerStatus)
 			}
 			updateProviderInfo(nodeId, "", "", providerStatus)
@@ -208,7 +207,7 @@ func reportClusterResource(location, nodeId string) {
 		logs.GetLogger().Errorf("Failed k8s statistical sources, error: %+v", err)
 		return
 	}
-	clusterSource := models.ClusterResource{
+	clusterSource := models2.ClusterResource{
 		NodeId:      nodeId,
 		Region:      location,
 		ClusterInfo: statisticalSources,
@@ -316,7 +315,7 @@ func watchNameSpaceForDeleted() {
 						}
 					}
 				}
-				docker.NewDockerService().CleanResource()
+				NewDockerService().CleanResource()
 			}()
 		}
 	}()

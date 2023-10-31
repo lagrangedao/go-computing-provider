@@ -2,13 +2,13 @@ package initializer
 
 import (
 	"fmt"
+	"github.com/lagrangedao/go-computing-provider/internal/computing"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/filswan/go-swan-lib/logs"
-	"github.com/lagrangedao/go-computing-provider/computing"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
 )

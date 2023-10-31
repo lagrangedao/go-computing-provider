@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/lagrangedao/go-computing-provider/conf"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/models"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"io"
 	"io/fs"
 	"log"
@@ -76,7 +75,7 @@ func BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath string) (s
 	dockerfilePath := filepath.Join(imagePath, "Dockerfile")
 	log.Printf("Image path: %s", imagePath)
 
-	dockerService := docker.NewDockerService()
+	dockerService := NewDockerService()
 	if err := dockerService.BuildImage(imagePath, imageName); err != nil {
 		logs.GetLogger().Errorf("Error building Docker image: %v", err)
 		return "", ""

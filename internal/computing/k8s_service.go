@@ -7,7 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/models"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"io"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"

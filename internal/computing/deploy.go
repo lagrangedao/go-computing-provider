@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
-	"github.com/lagrangedao/go-computing-provider/common"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/models"
-	"github.com/lagrangedao/go-computing-provider/yaml"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
+	yaml2 "github.com/lagrangedao/go-computing-provider/internal/yaml"
+	"github.com/lagrangedao/go-computing-provider/util"
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -79,7 +78,7 @@ func (d *Deploy) WithModelSettingFile(modelsSettingFile string) *Deploy {
 }
 
 func (d *Deploy) DockerfileToK8s() {
-	exposedPort, err := docker.ExtractExposedPort(d.dockerfilePath)
+	exposedPort, err := ExtractExposedPort(d.dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
 		return
@@ -153,7 +152,7 @@ func (d *Deploy) DockerfileToK8s() {
 }
 
 func (d *Deploy) YamlToK8s() {
-	containerResources, err := yaml.HandlerYaml(d.yamlPath)
+	containerResources, err := yaml2.HandlerYaml(d.yamlPath)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return
@@ -300,12 +299,12 @@ func (d *Deploy) YamlToK8s() {
 			logs.GetLogger().Error(err)
 			return
 		}
-    
+
 		updateJobStatus(d.jobUuid, models.JobDeployToK8s, "https://"+d.hostName)
 
 		if len(cr.Models) > 0 {
 			for _, res := range cr.Models {
-				go func(res yaml.ModelResource) {
+				go func(res yaml2.ModelResource) {
 					downloadModelUrl(d.k8sNameSpace, d.spaceUuid, serviceHost, []string{"wget", res.Url, "-O", filepath.Join(res.Dir, res.Name)})
 				}(res)
 			}
@@ -328,7 +327,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 	cpPath, _ := os.LookupEnv("CP_PATH")
 	basePath := filepath.Join(cpPath, "inference-model")
 
-	modelInfoOut, err := common.RunPythonScript(filepath.Join(basePath, "/scripts/hf_client.py"), "model_info", modelSetting.ModelId)
+	modelInfoOut, err := util.RunPythonScript(filepath.Join(basePath, "/scripts/hf_client.py"), "model_info", modelSetting.ModelId)
 	if err != nil {
 		logs.GetLogger().Errorf("exec model_info cmd failed, error: %+v", err)
 		return err
@@ -348,14 +347,14 @@ func (d *Deploy) ModelInferenceToK8s() error {
 	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
 	imageName := "lagrange/" + modelInfo.Framework + ":v1.0"
 
-	logFile := filepath.Join(d.SpacePath, docker.BuildFileName)
+	logFile := filepath.Join(d.SpacePath, BuildFileName)
 	if _, err = os.Create(logFile); err != nil {
 		return err
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	common.StreamPythonScriptOutput(&wg, filepath.Join(basePath, "build_docker.py"), basePath, modelInfo.Framework, imageName, logFile)
+	util.StreamPythonScriptOutput(&wg, filepath.Join(basePath, "build_docker.py"), basePath, modelInfo.Framework, imageName, logFile)
 	wg.Wait()
 
 	modelEnvs := []coreV1.EnvVar{
@@ -554,7 +553,7 @@ func (d *Deploy) watchContainerRunningTime() {
 		fullArgs = append(fullArgs, key, val)
 	}
 	_, _ = conn.Do("HSET", fullArgs...)
-  
+
 }
 
 func getHardwareDetail(description string) models.Resource {

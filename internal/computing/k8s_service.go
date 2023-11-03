@@ -103,15 +103,14 @@ func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceUuid st
 }
 
 func (s *K8sService) GetDeployment(namespace, deploymentName string) (string, error) {
-	deployment, err := s.k8sClient.AppsV1().Deployments(constants.K8S_NAMESPACE_NAME_PREFIX+strings.ToLower(namespace)).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
+	namespace = constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(namespace)
+	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
 	if err != nil {
 		logs.GetLogger().Errorf("namespace: %s, deploymentName: %s, error: %+v", namespace, deploymentName, err)
 		return "", err
 	}
 
 	podSelector := metaV1.SetAsLabelSelector(deployment.Spec.Selector.MatchLabels)
-
-	// 查询与 Deployment 关联的 Pod 列表
 	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
 		LabelSelector: podSelector.String(),
 	})

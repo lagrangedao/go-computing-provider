@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"github.com/gomodule/redigo/redis"
+	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/internal/computing"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
+	"os"
 	"time"
 )
 
@@ -31,6 +33,14 @@ var taskList = &cli.Command{
 		},
 	},
 	Action: func(cctx *cli.Context) error {
+		cpPath, exit := os.LookupEnv("CP_PATH")
+		if !exit {
+			return fmt.Errorf("missing CP_PATH env, please set export CP_PATH=xxx")
+		}
+		if err := conf.InitConfig(cpPath); err != nil {
+			return fmt.Errorf("load config file failed, error: %+v", err)
+		}
+
 		conn := computing.GetRedisClient()
 		prefix := constants.REDIS_FULL_PREFIX + "*"
 		keys, err := redis.Strings(conn.Do("KEYS", prefix))

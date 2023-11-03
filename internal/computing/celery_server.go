@@ -46,6 +46,7 @@ func newRedisPool(url string, password string) *redis.Pool {
 }
 
 func GetRedisClient() redis.Conn {
+	newRedisPool(conf.GetConfig().API.RedisUrl, conf.GetConfig().API.RedisPassword)
 	return redisPool.Get()
 }
 

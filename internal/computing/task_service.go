@@ -261,7 +261,7 @@ func watchExpiredTask() {
 					return
 				}
 				for _, key := range keys {
-					jobMetadata, err := retrieveJobMetadata(key)
+					jobMetadata, err := RetrieveJobMetadata(key)
 					if err != nil {
 						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
 						return

@@ -45,6 +45,10 @@ func newRedisPool(url string, password string) *redis.Pool {
 	return redisPool
 }
 
+func GetRedisClient() redis.Conn {
+	return redisPool.Get()
+}
+
 func NewCeleryService() *CeleryService {
 	celeryOnce.Do(
 		func() {

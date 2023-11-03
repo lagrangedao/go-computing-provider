@@ -102,6 +102,30 @@ func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceUuid st
 	})
 }
 
+func (s *K8sService) GetDeployment(namespace, deploymentName string) (string, error) {
+	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return "", err
+	}
+
+	podSelector := metaV1.SetAsLabelSelector(deployment.Spec.Selector.MatchLabels)
+
+	// 查询与 Deployment 关联的 Pod 列表
+	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
+		LabelSelector: podSelector.String(),
+	})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return "", err
+	}
+
+	if len(podList.Items) > 0 {
+		return string(podList.Items[0].Status.Phase), nil
+	}
+	return "", nil
+}
+
 func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
 	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(ctx, deploymentName, metaV1.GetOptions{})
 	if err != nil {

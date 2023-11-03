@@ -36,15 +36,19 @@ type Deploy struct {
 	modelsSettingFile string
 	k8sNameSpace      string
 	SpacePath         string
+	TaskType          string
+	DeployName        string
 }
 
 func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration int64) *Deploy {
+	taskType, hardwareDetail := getHardwareDetail(hardwareDesc)
 	return &Deploy{
 		jobUuid:          jobUuid,
 		hostName:         hostName,
 		walletAddress:    walletAddress,
 		duration:         duration,
-		hardwareResource: getHardwareDetail(hardwareDesc),
+		hardwareResource: hardwareDetail,
+		TaskType:         taskType,
 
 		k8sNameSpace: constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress),
 	}
@@ -137,9 +141,9 @@ func (d *Deploy) DockerfileToK8s() {
 		logs.GetLogger().Error(err)
 		return
 	}
-
+	d.DeployName = createDeployment.GetName()
 	updateJobStatus(d.jobUuid, models.JobPullImage)
-	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetName())
 
 	if _, err := d.deployK8sResource(int32(containerPort)); err != nil {
 		logs.GetLogger().Error(err)
@@ -290,7 +294,7 @@ func (d *Deploy) YamlToK8s() {
 			logs.GetLogger().Error(err)
 			return
 		}
-
+		d.DeployName = createDeployment.GetName()
 		updateJobStatus(d.jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
@@ -416,7 +420,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 		logs.GetLogger().Error(err)
 		return err
 	}
-
+	d.DeployName = createDeployment.GetName()
 	updateJobStatus(d.jobUuid, models.JobPullImage)
 	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
@@ -547,6 +551,9 @@ func (d *Deploy) watchContainerRunningTime() {
 		"space_name":     d.spaceName,
 		"expire_time":    strconv.Itoa(int(time.Now().Unix() + d.duration)),
 		"space_uuid":     d.spaceUuid,
+		"job_uuid":       d.jobUuid,
+		"task_type":      d.TaskType,
+		"deploy_name":    d.DeployName,
 	}
 
 	for key, val := range fields {
@@ -556,13 +563,16 @@ func (d *Deploy) watchContainerRunningTime() {
 
 }
 
-func getHardwareDetail(description string) models.Resource {
+func getHardwareDetail(description string) (string, models.Resource) {
+	var taskType string
 	var hardwareResource models.Resource
 	confSplits := strings.Split(description, "·")
 	if strings.Contains(confSplits[0], "CPU") {
 		hardwareResource.Gpu.Quantity = 0
 		hardwareResource.Gpu.Unit = ""
+		taskType = "CPU"
 	} else {
+		taskType = "GPU"
 		hardwareResource.Gpu.Quantity = 1
 		oldName := strings.TrimSpace(confSplits[0])
 		hardwareResource.Gpu.Unit = strings.ReplaceAll(oldName, "Nvidia", "NVIDIA")
@@ -580,5 +590,5 @@ func getHardwareDetail(description string) models.Resource {
 
 	hardwareResource.Storage.Quantity = 30
 	hardwareResource.Storage.Unit = "Gi"
-	return hardwareResource
+	return taskType, hardwareResource
 }

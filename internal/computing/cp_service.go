@@ -13,7 +13,7 @@ import (
 	"github.com/lagrangedao/go-computing-provider/build"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	models2 "github.com/lagrangedao/go-computing-provider/internal/models"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"github.com/lagrangedao/go-computing-provider/util"
 	"io"
 	v1 "k8s.io/api/core/v1"
@@ -31,7 +31,7 @@ import (
 )
 
 func GetServiceProviderInfo(c *gin.Context) {
-	info := new(models2.HostInfo)
+	info := new(models.HostInfo)
 	info.SwanProviderVersion = build.UserVersion()
 	info.OperatingSystem = runtime.GOOS
 	info.Architecture = runtime.GOARCH
@@ -40,7 +40,7 @@ func GetServiceProviderInfo(c *gin.Context) {
 }
 
 func ReceiveJob(c *gin.Context) {
-	var jobData models2.JobData
+	var jobData models.JobData
 	if err := c.ShouldBindJSON(&jobData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -87,7 +87,7 @@ func ReceiveJob(c *gin.Context) {
 	c.JSON(http.StatusOK, jobData)
 }
 
-func submitJob(jobData *models2.JobData) error {
+func submitJob(jobData *models.JobData) error {
 	logs.GetLogger().Printf("submitting job...")
 	oldMask := syscall.Umask(0)
 	defer syscall.Umask(oldMask)
@@ -128,7 +128,7 @@ func submitJob(jobData *models2.JobData) error {
 }
 
 func RedeployJob(c *gin.Context) {
-	var jobData models2.JobData
+	var jobData models.JobData
 
 	if err := c.ShouldBindJSON(&jobData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -215,7 +215,7 @@ func ReNewJob(c *gin.Context) {
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + jobData.SpaceUuid
-	spaceDetail, err := retrieveJobMetadata(redisKey)
+	spaceDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 		return
@@ -235,7 +235,12 @@ func ReNewJob(c *gin.Context) {
 			"space_name":     spaceDetail.SpaceName,
 			"expire_time":    strconv.Itoa(int(time.Now().Unix()) + int(leftTime) + jobData.Duration),
 			"space_uuid":     spaceDetail.SpaceUuid,
+			"job_uuid":       spaceDetail.JobUuid,
+			"task_type":      spaceDetail.TaskType,
+			"deploy_name":    spaceDetail.DeployName,
+			"rewards":        spaceDetail.Rewards,
 		}
+
 		for key, val := range fields {
 			fullArgs = append(fullArgs, key, val)
 		}
@@ -264,7 +269,7 @@ func DeleteJob(c *gin.Context) {
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
-	spaceDetail, err := retrieveJobMetadata(redisKey)
+	spaceDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		if stErr.Is(err, NotFoundRedisKey) {
 			c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
@@ -293,7 +298,7 @@ func StatisticalSources(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, models2.ClusterResource{
+	c.JSON(http.StatusOK, models.ClusterResource{
 		Region:      location,
 		ClusterInfo: statisticalSources,
 	})
@@ -318,7 +323,7 @@ func GetSpaceLog(c *gin.Context) {
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
-	spaceDetail, err := retrieveJobMetadata(redisKey)
+	spaceDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
 		return
@@ -334,7 +339,7 @@ func GetSpaceLog(c *gin.Context) {
 	handleConnection(conn, spaceDetail, logType)
 }
 
-func handleConnection(conn *websocket.Conn, spaceDetail models2.CacheSpaceDetail, logType string) {
+func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
 	client := NewWsClient(conn)
 
 	if logType == "build" {
@@ -382,7 +387,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models2.CacheSpaceDetail
 }
 
 func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
-	updateJobStatus(jobUuid, models2.JobUploadResult)
+	updateJobStatus(jobUuid, models.JobUploadResult)
 	defer func() {
 		if err := recover(); err != nil {
 			logs.GetLogger().Errorf("deploy space task painc, error: %+v", err)
@@ -418,7 +423,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		return ""
 	}
 
-	var spaceJson models2.SpaceJSON
+	var spaceJson models.SpaceJSON
 	if err := json.NewDecoder(resp.Body).Decode(&spaceJson); err != nil {
 		logs.GetLogger().Errorf("error decoding Space API response JSON: %v", err)
 		return ""
@@ -463,7 +468,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 
 	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
 	os.RemoveAll(spacePath)
-	updateJobStatus(jobUuid, models2.JobDownloadSource)
+	updateJobStatus(jobUuid, models.JobDownloadSource)
 	containsYaml, yamlPath, imagePath, modelsSettingFile, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
@@ -570,17 +575,17 @@ func downloadModelUrl(namespace, spaceUuid, serviceIp string, podCmd []string) {
 	}
 }
 
-func updateJobStatus(jobUuid string, jobStatus models2.JobStatus, url ...string) {
+func updateJobStatus(jobUuid string, jobStatus models.JobStatus, url ...string) {
 	go func() {
 		if len(url) > 0 {
-			deployingChan <- models2.Job{
+			deployingChan <- models.Job{
 				Uuid:   jobUuid,
 				Status: jobStatus,
 				Count:  0,
 				Url:    url[0],
 			}
 		} else {
-			deployingChan <- models2.Job{
+			deployingChan <- models.Job{
 				Uuid:   jobUuid,
 				Status: jobStatus,
 				Count:  0,
@@ -657,49 +662,62 @@ func getLocalIPAddress() (string, error) {
 
 var NotFoundRedisKey = stErr.New("not found redis key")
 
-func retrieveJobMetadata(key string) (models2.CacheSpaceDetail, error) {
+func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	redisConn := redisPool.Get()
 	defer redisConn.Close()
 
 	exist, err := redis.Int(redisConn.Do("EXISTS", key))
 	if err != nil {
-		return models2.CacheSpaceDetail{}, err
+		return models.CacheSpaceDetail{}, err
 	}
 	if exist == 0 {
-		return models2.CacheSpaceDetail{}, NotFoundRedisKey
+		return models.CacheSpaceDetail{}, NotFoundRedisKey
 	}
 
-	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid")
+	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid", "job_uuid",
+		"task_type", "deploy_name", "rewards")
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
-		return models2.CacheSpaceDetail{}, err
+		return models.CacheSpaceDetail{}, err
 	}
 
 	var (
 		walletAddress string
 		spaceName     string
-		spaceUuid     string
 		expireTime    int64
+		spaceUuid     string
+		jobUuid       string
+		taskType      string
+		deployName    string
+		rewards       string
 	)
 
 	if len(valuesStr) >= 3 {
 		walletAddress = valuesStr[0]
 		spaceName = valuesStr[1]
-
 		expireTimeStr := valuesStr[2]
 		spaceUuid = valuesStr[3]
+		jobUuid = valuesStr[4]
+		taskType = valuesStr[5]
+		deployName = valuesStr[6]
+		rewards = valuesStr[7]
+
 		expireTime, err = strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
-			return models2.CacheSpaceDetail{}, err
+			return models.CacheSpaceDetail{}, err
 		}
 	}
 
-	return models2.CacheSpaceDetail{
+	return models.CacheSpaceDetail{
 		WalletAddress: walletAddress,
 		SpaceName:     spaceName,
 		SpaceUuid:     spaceUuid,
 		ExpireTime:    expireTime,
+		JobUuid:       jobUuid,
+		TaskType:      taskType,
+		DeployName:    deployName,
+		Rewards:       rewards,
 	}, nil
 }

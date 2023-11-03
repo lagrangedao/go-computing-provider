@@ -103,7 +103,7 @@ func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceUuid st
 }
 
 func (s *K8sService) GetDeployment(namespace, deploymentName string) (string, error) {
-	deployment, err := s.k8sClient.AppsV1().Deployments(constants.K8S_NAMESPACE_NAME_PREFIX+namespace).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
+	deployment, err := s.k8sClient.AppsV1().Deployments(constants.K8S_NAMESPACE_NAME_PREFIX+strings.ToLower(namespace)).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
 	if err != nil {
 		logs.GetLogger().Errorf("namespace: %s, deploymentName: %s, error: %+v", namespace, deploymentName, err)
 		return "", err

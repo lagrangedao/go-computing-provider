@@ -59,7 +59,7 @@ var taskList = &cli.Command{
 			et := time.Unix(jobDetail.ExpireTime, 0).Format("2006-01-02 15:04:05")
 
 			k8sService := computing.NewK8sService()
-			status, err := k8sService.GetDeployment(jobDetail.SpaceName, jobDetail.DeployName)
+			status, err := k8sService.GetDeployment(jobDetail.WalletAddress, jobDetail.DeployName)
 			if err != nil {
 				return fmt.Errorf("failed get job status: %s, error: %+v", jobDetail.JobUuid, err)
 			}

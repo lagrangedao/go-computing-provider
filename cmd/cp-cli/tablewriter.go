@@ -68,20 +68,20 @@ func (v *VisualTable) Generate() {
 	table.Render()
 }
 
-func main() {
-	header := []string{"Date", "Description", "CV2", "Amount"}
-	data := [][]string{
-		[]string{"1/1/2014", "Domain name", "2233", "$10.98"},
-		[]string{"1/1/2014", "January Hosting", "2233", "$54.95"},
-		[]string{"1/4/2014", "February Hosting ", "2233", "$51.00"},
-		[]string{"1/4/2014", "February Extra Bandwidth", "2233", "$30.00"},
-	}
-
-	NewVisualTable(header, data, []RowColor{
-		{
-			row:    1,
-			column: []int{1, 3},
-			color:  []tablewriter.Colors{{tablewriter.Normal, tablewriter.FgRedColor}, {tablewriter.Bold, tablewriter.FgWhiteColor}},
-		},
-	}).Generate()
-}
+//func main() {
+//	header := []string{"Date", "Description", "CV2", "Amount"}
+//	data := [][]string{
+//		[]string{"1/1/2014", "Domain name", "2233", "$10.98"},
+//		[]string{"1/1/2014", "January Hosting", "2233", "$54.95"},
+//		[]string{"1/4/2014", "February Hosting ", "2233", "$51.00"},
+//		[]string{"1/4/2014", "February Extra Bandwidth", "2233", "$30.00"},
+//	}
+//
+//	NewVisualTable(header, data, []RowColor{
+//		{
+//			row:    1,
+//			column: []int{1, 3},
+//			color:  []tablewriter.Colors{{tablewriter.Normal, tablewriter.FgRedColor}, {tablewriter.Bold, tablewriter.FgWhiteColor}},
+//		},
+//	}).Generate()
+//}

@@ -102,17 +102,10 @@ func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceUuid st
 	})
 }
 
-func (s *K8sService) GetDeployment(namespace, deploymentName string) (string, error) {
+func (s *K8sService) GetDeploymentStatus(namespace, spaceUuid string) (string, error) {
 	namespace = constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(namespace)
-	deployment, err := s.k8sClient.AppsV1().Deployments(namespace).Get(context.TODO(), deploymentName, metaV1.GetOptions{})
-	if err != nil {
-		logs.GetLogger().Errorf("namespace: %s, deploymentName: %s, error: %+v", namespace, deploymentName, err)
-		return "", err
-	}
-
-	podSelector := metaV1.SetAsLabelSelector(deployment.Spec.Selector.MatchLabels)
 	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
-		LabelSelector: podSelector.String(),
+		LabelSelector: fmt.Sprintf("lad_app=%s", spaceUuid),
 	})
 	if err != nil {
 		logs.GetLogger().Error(err)

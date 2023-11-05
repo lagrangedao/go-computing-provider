@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/olekukonko/tablewriter"
-	"log"
 	"os"
 )
 
@@ -30,26 +29,25 @@ func NewVisualTable(header []string, data [][]string, rowColor []RowColor) *Visu
 func (v *VisualTable) Generate() {
 	table := tablewriter.NewWriter(os.Stdout)
 
-	for _, rowColor := range v.RowColor {
-		if len(v.Data) < rowColor.row {
-			log.Println("index out of range: data < row")
-			break
-		}
-		rowLength := len(v.Data[rowColor.row])
+	for index, datum := range v.Data {
 		var rowColors []tablewriter.Colors
-		for i := 0; i < rowLength; i++ {
-			var defaultFlag = true
-			for n, colIndex := range rowColor.column {
-				if i == colIndex {
-					rowColors = append(rowColors, rowColor.color[n])
-					defaultFlag = false
+		for _, rowColor := range v.RowColor {
+			if index == rowColor.row {
+				for dIndex := range datum {
+					var defaultFlag = true
+					for n, colIndex := range rowColor.column {
+						if dIndex == colIndex {
+							rowColors = append(rowColors, rowColor.color[n])
+							defaultFlag = false
+						}
+					}
+					if defaultFlag {
+						rowColors = append(rowColors, tablewriter.Colors{})
+					}
 				}
 			}
-			if defaultFlag {
-				rowColors = append(rowColors, tablewriter.Colors{})
-			}
 		}
-		table.Rich(v.Data[rowColor.row], rowColors)
+		table.Rich(v.Data[index], rowColors)
 	}
 
 	table.SetHeader(v.Header)
@@ -64,7 +62,6 @@ func (v *VisualTable) Generate() {
 	table.SetBorder(false)
 	table.SetTablePadding("\t")
 	table.SetNoWhiteSpace(true)
-	table.AppendBulk(v.Data)
 	table.Render()
 }
 

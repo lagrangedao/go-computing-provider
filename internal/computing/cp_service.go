@@ -110,20 +110,21 @@ func submitJob(jobData *models.JobData) error {
 		return err
 	}
 
-	storageService := NewStorageService()
-	mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
-		return err
-	}
-	logs.GetLogger().Infof("jobuuid: %s successfully submitted to IPFS", jobData.UUID)
-
-	gatewayUrl, err := storageService.GetGatewayUrl()
-	if err != nil {
-		logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
-		return err
-	}
-	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
+	//storageService := NewStorageService()
+	//mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
+	//if err != nil {
+	//	logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
+	//	return err
+	//}
+	//logs.GetLogger().Infof("jobuuid: %s successfully submitted to IPFS", jobData.UUID)
+	//
+	//gatewayUrl, err := storageService.GetGatewayUrl()
+	//if err != nil {
+	//	logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
+	//	return err
+	//}
+	//jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
+	jobData.JobResultURI = ""
 	return nil
 }
 

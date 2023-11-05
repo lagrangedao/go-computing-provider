@@ -1,0 +1,9 @@
+
+1. task list
+cp-cli task list -v
+
+2. task detail  args: [space uuid]
+cp-cli task get 9da873de-49a0-406f-8da6-2c515021f51d
+
+3. delete task  args: [wallet address、 deploy-name]
+cp-cli task delete 0xFbc1d38a2127D81BFe3EA347bec7310a1cfa2373 deploy-9da873de-49a0-406f-8da6-2c515021f51d

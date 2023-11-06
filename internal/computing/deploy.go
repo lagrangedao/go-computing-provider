@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/internal/models"
 	yaml2 "github.com/lagrangedao/go-computing-provider/internal/yaml"
@@ -38,6 +39,7 @@ type Deploy struct {
 	SpacePath         string
 	TaskType          string
 	DeployName        string
+	hardwareDesc      string
 }
 
 func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration int64) *Deploy {
@@ -49,8 +51,8 @@ func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration i
 		duration:         duration,
 		hardwareResource: hardwareDetail,
 		TaskType:         taskType,
-
-		k8sNameSpace: constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress),
+		k8sNameSpace:     constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress),
+		hardwareDesc:     hardwareDesc,
 	}
 }
 
@@ -545,7 +547,10 @@ func (d *Deploy) watchContainerRunningTime() {
 		return
 	}
 
-	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + d.spaceUuid}
+	key := constants.REDIS_FULL_PREFIX + d.spaceUuid
+	conn.Do("DEL", redis.Args{}.AddFlat(key)...)
+
+	fullArgs := []interface{}{key}
 	fields := map[string]string{
 		"wallet_address": d.walletAddress,
 		"space_name":     d.spaceName,
@@ -554,6 +559,7 @@ func (d *Deploy) watchContainerRunningTime() {
 		"job_uuid":       d.jobUuid,
 		"task_type":      d.TaskType,
 		"deploy_name":    d.DeployName,
+		"hardware":       d.hardwareDesc,
 	}
 
 	for key, val := range fields {

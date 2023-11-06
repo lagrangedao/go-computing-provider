@@ -240,6 +240,7 @@ func ReNewJob(c *gin.Context) {
 			"task_type":      spaceDetail.TaskType,
 			"deploy_name":    spaceDetail.DeployName,
 			"rewards":        spaceDetail.Rewards,
+			"hardware":       spaceDetail.Hardware,
 		}
 
 		for key, val := range fields {
@@ -676,7 +677,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	}
 
 	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid", "job_uuid",
-		"task_type", "deploy_name", "rewards")
+		"task_type", "deploy_name", "rewards", "hardware")
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
@@ -692,6 +693,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		taskType      string
 		deployName    string
 		rewards       string
+		hardware      string
 	)
 
 	if len(valuesStr) >= 3 {
@@ -703,6 +705,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		taskType = valuesStr[5]
 		deployName = valuesStr[6]
 		rewards = valuesStr[7]
+		hardware = valuesStr[8]
 
 		expireTime, err = strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
@@ -720,5 +723,6 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		TaskType:      taskType,
 		DeployName:    deployName,
 		Rewards:       rewards,
+		Hardware:      hardware,
 	}, nil
 }

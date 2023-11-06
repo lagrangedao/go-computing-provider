@@ -71,11 +71,33 @@ var taskList = &cli.Command{
 			}
 
 			if fullFlag {
+				var spaceUuid string
+				if len(jobDetail.DeployName) > 0 {
+					spaceUuid = jobDetail.DeployName[7:]
+				}
 				taskData = append(taskData,
-					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, jobDetail.DeployName[7:], jobDetail.SpaceName, jobDetail.DeployName, status, "SPACE STATUS", "RTD", et, ""})
+					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, spaceUuid, jobDetail.SpaceName, jobDetail.DeployName, status, "SPACE STATUS", "RTD", et, ""})
 			} else {
+
+				var walletAddress string
+				if len(jobDetail.WalletAddress) > 0 {
+					walletAddress = jobDetail.WalletAddress[24:]
+				}
+
+				var jobUuid string
+				if len(jobDetail.WalletAddress) > 0 {
+					jobUuid = jobDetail.JobUuid[24:]
+				}
+
+				var spaceUuid string
+				var deployName string
+				if len(jobDetail.DeployName) > 0 {
+					spaceUuid = jobDetail.DeployName[:15]
+					deployName = jobDetail.DeployName[32:]
+				}
+
 				taskData = append(taskData,
-					[]string{jobDetail.JobUuid[24:], jobDetail.TaskType, jobDetail.WalletAddress[24:], jobDetail.DeployName[:15], jobDetail.SpaceName, jobDetail.DeployName[32:], status, "SPACE STATUS", "RTD", et, ""})
+					[]string{jobUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, deployName, status, "SPACE STATUS", "RTD", et, ""})
 			}
 
 			var rowColor []tablewriter.Colors

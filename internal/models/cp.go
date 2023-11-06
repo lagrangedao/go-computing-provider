@@ -111,4 +111,5 @@ type CacheSpaceDetail struct {
 	TaskType      string
 	DeployName    string
 	Rewards       string
+	Hardware      string
 }

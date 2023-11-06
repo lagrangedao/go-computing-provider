@@ -85,7 +85,7 @@ var taskList = &cli.Command{
 				}
 
 				var jobUuid string
-				if len(jobDetail.WalletAddress) > 0 {
+				if len(jobDetail.JobUuid) > 0 {
 					jobUuid = jobDetail.JobUuid[24:]
 				}
 

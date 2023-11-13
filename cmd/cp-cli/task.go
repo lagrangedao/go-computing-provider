@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/conf"
@@ -9,8 +10,12 @@ import (
 	"github.com/lagrangedao/go-computing-provider/internal/computing"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
+	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"log"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -70,13 +75,26 @@ var taskList = &cli.Command{
 				return fmt.Errorf("failed get job status: %s, error: %+v", jobDetail.JobUuid, err)
 			}
 
-			if fullFlag {
-				var spaceUuid string
-				if len(jobDetail.DeployName) > 0 {
-					spaceUuid = jobDetail.DeployName[7:]
+			var fullSpaceUuid string
+			var spaceStatus, rtd, rewards string
+			if len(jobDetail.DeployName) > 0 {
+				fullSpaceUuid = jobDetail.DeployName[7:]
+			}
+			if len(fullSpaceUuid) > 0 {
+				nodeID, _, _ := computing.GenerateNodeID(cpPath)
+				spaceInfo, err := getSpaceInfoResponse(nodeID, fullSpaceUuid)
+				if err != nil {
+					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
+				} else {
+					spaceStatus = spaceInfo.SpaceStatus
+					rtd = strconv.Itoa(spaceInfo.RunningTime) + "(h)"
+					rewards = strconv.Itoa(spaceInfo.PaymentAmount)
 				}
+			}
+
+			if fullFlag {
 				taskData = append(taskData,
-					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, spaceUuid, jobDetail.SpaceName, jobDetail.DeployName, status, "SPACE STATUS", "RTD", et, ""})
+					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, fullSpaceUuid, jobDetail.SpaceName, jobDetail.DeployName, status, spaceStatus, rtd, et, rewards})
 			} else {
 
 				var walletAddress string
@@ -97,7 +115,7 @@ var taskList = &cli.Command{
 				}
 
 				taskData = append(taskData,
-					[]string{jobUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, deployName, status, "SPACE STATUS", "RTD", et, ""})
+					[]string{jobUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, deployName, status, spaceStatus, rtd, et, rewards})
 			}
 
 			var rowColor []tablewriter.Colors
@@ -157,15 +175,31 @@ var taskDetail = &cli.Command{
 			return fmt.Errorf("failed get job status: %s, error: %+v", jobDetail.JobUuid, err)
 		}
 
+		var fullSpaceUuid string
+		var rtd, rewards string
+		if len(jobDetail.DeployName) > 0 {
+			fullSpaceUuid = jobDetail.DeployName[7:]
+		}
+		if len(fullSpaceUuid) > 0 {
+			nodeID, _, _ := computing.GenerateNodeID(cpPath)
+			spaceInfo, err := getSpaceInfoResponse(nodeID, fullSpaceUuid)
+			if err != nil {
+				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
+			} else {
+				rtd = strconv.Itoa(spaceInfo.RunningTime) + "(h)"
+				rewards = strconv.Itoa(spaceInfo.PaymentAmount)
+			}
+		}
+
 		var taskData [][]string
 		taskData = append(taskData, []string{"TASK TYPE:", jobDetail.TaskType})
 		taskData = append(taskData, []string{"WALLET ADDRESS:", jobDetail.WalletAddress})
 		taskData = append(taskData, []string{"SPACE NAME:", jobDetail.SpaceName})
-		taskData = append(taskData, []string{"REWARD:", ""})
+		taskData = append(taskData, []string{"REWARD:", rewards})
 		taskData = append(taskData, []string{"HARDWARE:", jobDetail.Hardware})
 		taskData = append(taskData, []string{"STATUS:", status})
 		taskData = append(taskData, []string{"DEPLOY NAME:", jobDetail.DeployName})
-		taskData = append(taskData, []string{"RTD:", ""})
+		taskData = append(taskData, []string{"RTD:", rtd})
 		taskData = append(taskData, []string{"ET:", et})
 
 		var rowColor []tablewriter.Colors
@@ -226,4 +260,41 @@ var taskDelete = &cli.Command{
 
 		return nil
 	},
+}
+
+type ApiResponse struct {
+	PaymentAmount int    `json:"payment_amount"`
+	RunningTime   int    `json:"running_time"`
+	SpaceStatus   string `json:"space_status"`
+}
+
+func getSpaceInfoResponse(nodeID, spaceUUID string) (*ApiResponse, error) {
+	url := fmt.Sprintf("%s/cp/%s/%s", conf.GetConfig().LAG.ServerUrl, nodeID, spaceUUID)
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request failed: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	var apiResponse ApiResponse
+	err = json.Unmarshal(body, &apiResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	}
+	return &apiResponse, nil
 }

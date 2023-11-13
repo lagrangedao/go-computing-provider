@@ -132,8 +132,8 @@ func (d *Deploy) DockerfileToK8s() {
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: int32(containerPort),
 						}},
-						Env:       d.createEnv(),
-						Resources: d.createResources(),
+						Env: d.createEnv(),
+						//Resources: d.createResources(),
 					}},
 				},
 			},
@@ -411,8 +411,8 @@ func (d *Deploy) ModelInferenceToK8s() error {
 						Ports: []coreV1.ContainerPort{{
 							ContainerPort: int32(80),
 						}},
-						Env:       d.createEnv(modelEnvs...),
-						Resources: d.createResources(),
+						Env: d.createEnv(modelEnvs...),
+						//Resources: d.createResources(),
 					}},
 				},
 			},

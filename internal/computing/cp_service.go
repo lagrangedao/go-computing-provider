@@ -124,7 +124,6 @@ func submitJob(jobData *models.JobData) error {
 		return err
 	}
 	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
-	jobData.JobResultURI = ""
 	return nil
 }
 

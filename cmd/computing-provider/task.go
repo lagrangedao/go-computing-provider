@@ -15,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -85,13 +86,15 @@ var taskList = &cli.Command{
 					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 				} else {
 					spaceStatus = spaceInfo.Data.SpaceStatus
-					if spaceInfo.Data.RunningTime != "" {
-						rtd = spaceInfo.Data.RunningTime + " h"
+					if spaceInfo.Data.RunningTime != 0 {
+						rtd = strconv.FormatFloat(spaceInfo.Data.RunningTime, 'f', -1, 64) + " h"
 					}
-					if spaceInfo.Data.RemainingTime != "" {
-						et = spaceInfo.Data.RemainingTime + " h"
+					if spaceInfo.Data.RemainingTime != 0 {
+						et = strconv.FormatFloat(spaceInfo.Data.RemainingTime, 'f', -1, 64) + " h"
 					}
-					rewards = spaceInfo.Data.PaymentAmount
+					if spaceInfo.Data.PaymentAmount != 0 {
+						rewards = strconv.FormatFloat(spaceInfo.Data.PaymentAmount, 'f', -1, 64) + " h"
+					}
 				}
 			}
 
@@ -186,13 +189,15 @@ var taskDetail = &cli.Command{
 			if err != nil {
 				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 			} else {
-				if spaceInfo.Data.RunningTime != "" {
-					rtd = spaceInfo.Data.RunningTime + " h"
+				if spaceInfo.Data.RunningTime != 0 {
+					rtd = strconv.FormatFloat(spaceInfo.Data.RunningTime, 'f', -1, 64) + " h"
 				}
-				if spaceInfo.Data.RemainingTime != "" {
-					et = spaceInfo.Data.RemainingTime + " h"
+				if spaceInfo.Data.RemainingTime != 0 {
+					et = strconv.FormatFloat(spaceInfo.Data.RemainingTime, 'f', -1, 64) + " h"
 				}
-				rewards = spaceInfo.Data.PaymentAmount
+				if spaceInfo.Data.PaymentAmount != 0 {
+					rewards = strconv.FormatFloat(spaceInfo.Data.PaymentAmount, 'f', -1, 64) + " h"
+				}
 			}
 		}
 
@@ -305,8 +310,8 @@ type SpaceResp struct {
 }
 
 type ApiResponse struct {
-	PaymentAmount string `json:"payment_amount"`
-	RunningTime   string `json:"running_time"`
-	SpaceStatus   string `json:"space_status"`
-	RemainingTime string `json:"remaining_time"`
+	PaymentAmount float64 `json:"payment_amount"`
+	RunningTime   float64 `json:"running_time"`
+	SpaceStatus   string  `json:"space_status"`
+	RemainingTime float64 `json:"remaining_time"`
 }

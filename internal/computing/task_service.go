@@ -9,6 +9,7 @@ import (
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	models2 "github.com/lagrangedao/go-computing-provider/internal/models"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strings"
@@ -273,7 +274,16 @@ func watchExpiredTask() {
 						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s,expireTime: %s. the job starting terminated", key, namespace, expireTimeStr)
 						if err = deleteJob(namespace, jobMetadata.SpaceUuid); err == nil {
 							deleteKey = append(deleteKey, key)
+							continue
 						}
+					}
+
+					k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
+					deployName := constants.K8S_DEPLOY_NAME_PREFIX + jobMetadata.SpaceUuid
+					service := NewK8sService()
+					if _, err = service.k8sClient.AppsV1().Deployments(k8sNameSpace).Get(context.TODO(), deployName, metaV1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+						deleteKey = append(deleteKey, key)
+						continue
 					}
 				}
 				conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)

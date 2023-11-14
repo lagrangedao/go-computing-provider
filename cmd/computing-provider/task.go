@@ -41,7 +41,7 @@ var taskList = &cli.Command{
 	},
 	Action: func(cctx *cli.Context) error {
 
-		fullFlag := cctx.Bool("verpose")
+		fullFlag := cctx.Bool("verbose")
 
 		cpPath, exit := os.LookupEnv("CP_PATH")
 		if !exit {
@@ -85,8 +85,12 @@ var taskList = &cli.Command{
 					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 				} else {
 					spaceStatus = spaceInfo.SpaceStatus
-					rtd = spaceInfo.RunningTime + " h"
-					et = spaceInfo.RemainingTime + " h"
+					if spaceInfo.RunningTime != "" {
+						rtd = spaceInfo.RunningTime + " h"
+					}
+					if spaceInfo.RemainingTime != "" {
+						et = spaceInfo.RemainingTime + " h"
+					}
 					rewards = spaceInfo.PaymentAmount
 				}
 			}
@@ -183,8 +187,12 @@ var taskDetail = &cli.Command{
 			if err != nil {
 				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 			} else {
-				rtd = spaceInfo.RunningTime + " h"
-				et = spaceInfo.RemainingTime + " h"
+				if spaceInfo.RunningTime != "" {
+					rtd = spaceInfo.RunningTime + " h"
+				}
+				if spaceInfo.RemainingTime != "" {
+					et = spaceInfo.RemainingTime + " h"
+				}
 				rewards = spaceInfo.PaymentAmount
 			}
 		}

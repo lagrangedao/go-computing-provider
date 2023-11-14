@@ -92,9 +92,7 @@ func GenerateNodeID(cpRepoPath string) (string, string, string) {
 		if err != nil {
 			log.Fatalf("Error reading private key: %v", err)
 		}
-		log.Printf("Found key in %s", privateKeyPath)
 	} else {
-		log.Printf("Created key in %s", privateKeyPath)
 		privateKeyBytes = make([]byte, 32)
 		_, err := rand.Read(privateKeyBytes)
 		if err != nil {

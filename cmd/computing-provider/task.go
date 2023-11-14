@@ -97,7 +97,7 @@ var taskList = &cli.Command{
 
 			if fullFlag {
 				taskData = append(taskData,
-					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, fullSpaceUuid, jobDetail.SpaceName, jobDetail.DeployName, status, spaceStatus, rtd, et, rewards})
+					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, fullSpaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
 			} else {
 
 				var walletAddress string
@@ -137,7 +137,7 @@ var taskList = &cli.Command{
 		}
 
 		header := []string{"TASK UUID", "TASK TYPE", "WALLET ADDRESS", "SPACE UUID", "SPACE NAME", "STATUS", "SPACE STATUS", "RUNNING TIME", "REMAINING TIME", "REWARDS"}
-
+		fmt.Println("")
 		NewVisualTable(header, taskData, rowColorList).Generate()
 
 		return nil

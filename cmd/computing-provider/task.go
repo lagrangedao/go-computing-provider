@@ -85,16 +85,10 @@ var taskList = &cli.Command{
 				if err != nil {
 					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 				} else {
-					spaceStatus = spaceInfo.Data.SpaceStatus
-					if spaceInfo.Data.RunningTime != 0 {
-						rtd = strconv.FormatFloat(spaceInfo.Data.RunningTime, 'f', -1, 64) + " h"
-					}
-					if spaceInfo.Data.RemainingTime != 0 {
-						et = strconv.FormatFloat(spaceInfo.Data.RemainingTime, 'f', -1, 64) + " h"
-					}
-					if spaceInfo.Data.PaymentAmount != 0 {
-						rewards = strconv.FormatFloat(spaceInfo.Data.PaymentAmount, 'f', -1, 64) + " h"
-					}
+					spaceStatus = spaceInfo.SpaceStatus
+					rtd = spaceInfo.RunningTime
+					et = spaceInfo.RemainingTime
+					rewards = spaceInfo.PaymentAmount
 				}
 			}
 
@@ -189,15 +183,9 @@ var taskDetail = &cli.Command{
 			if err != nil {
 				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 			} else {
-				if spaceInfo.Data.RunningTime != 0 {
-					rtd = strconv.FormatFloat(spaceInfo.Data.RunningTime, 'f', -1, 64) + " h"
-				}
-				if spaceInfo.Data.RemainingTime != 0 {
-					et = strconv.FormatFloat(spaceInfo.Data.RemainingTime, 'f', -1, 64) + " h"
-				}
-				if spaceInfo.Data.PaymentAmount != 0 {
-					rewards = strconv.FormatFloat(spaceInfo.Data.PaymentAmount, 'f', -1, 64) + " h"
-				}
+				rtd = spaceInfo.RunningTime
+				et = spaceInfo.RemainingTime
+				rewards = spaceInfo.PaymentAmount
 			}
 		}
 
@@ -295,23 +283,52 @@ func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	var spaceResp SpaceResp
-	err = json.Unmarshal(body, &spaceResp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON: %v", err)
+	var startResp struct {
+		Data struct {
+			PaymentAmount float64 `json:"payment_amount"`
+			RemainingTime float64 `json:"remaining_time"`
+			RunningTime   float64 `json:"running_time"`
+			SpaceStatus   string  `json:"space_status"`
+		} `json:"data"`
+		Message interface{} `json:"message"`
+		Status  string      `json:"status"`
 	}
-	return &spaceResp, nil
+
+	var spaceResp SpaceResp
+
+	if err = json.Unmarshal(body, &startResp); err != nil {
+		var runResp struct {
+			Data struct {
+				PaymentAmount string `json:"payment_amount"`
+				RemainingTime string `json:"remaining_time"`
+				RunningTime   string `json:"running_time"`
+				SpaceStatus   string `json:"space_status"`
+			} `json:"data"`
+			Message interface{} `json:"message"`
+			Status  string      `json:"status"`
+		}
+		if err = json.Unmarshal(body, &runResp); err != nil {
+			return nil, fmt.Errorf("failed to parse JSON: %v", err)
+		} else {
+			spaceResp.PaymentAmount = runResp.Data.PaymentAmount
+			spaceResp.RemainingTime = runResp.Data.RemainingTime + " h"
+			spaceResp.RunningTime = runResp.Data.RunningTime + " h"
+			spaceResp.SpaceStatus = runResp.Data.SpaceStatus
+
+			return &spaceResp, nil
+		}
+	} else {
+		spaceResp.PaymentAmount = strconv.FormatFloat(startResp.Data.PaymentAmount, 'f', -1, 64)
+		spaceResp.RemainingTime = strconv.FormatFloat(startResp.Data.RemainingTime, 'f', -1, 64) + " h"
+		spaceResp.RunningTime = strconv.FormatFloat(startResp.Data.RunningTime, 'f', -1, 64) + " h"
+		spaceResp.SpaceStatus = startResp.Data.SpaceStatus
+		return &spaceResp, nil
+	}
 }
 
 type SpaceResp struct {
-	Data    ApiResponse `json:"data"`
-	Message string      `json:"message"`
-	Status  string      `json:"status"`
-}
-
-type ApiResponse struct {
-	PaymentAmount float64 `json:"payment_amount"`
-	RunningTime   float64 `json:"running_time"`
-	SpaceStatus   string  `json:"space_status"`
-	RemainingTime float64 `json:"remaining_time"`
+	PaymentAmount string `json:"payment_amount"`
+	RemainingTime string `json:"remaining_time"`
+	RunningTime   string `json:"running_time"`
+	SpaceStatus   string `json:"space_status"`
 }

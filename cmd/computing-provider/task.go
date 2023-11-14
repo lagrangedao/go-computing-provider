@@ -319,9 +319,9 @@ func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
 		if err = json.Unmarshal(body, &runResp); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %v", err)
 		} else {
-			spaceResp.PaymentAmount = runResp.Data.PaymentAmount
-			spaceResp.RemainingTime = runResp.Data.RemainingTime + " h"
-			spaceResp.RunningTime = runResp.Data.RunningTime + " h"
+			spaceResp.PaymentAmount = roundToOneDecimalPlace(runResp.Data.PaymentAmount)
+			spaceResp.RemainingTime = roundToOneDecimalPlace(runResp.Data.RemainingTime) + " h"
+			spaceResp.RunningTime = roundToOneDecimalPlace(runResp.Data.RunningTime) + " h"
 			spaceResp.SpaceStatus = runResp.Data.SpaceStatus
 
 			return &spaceResp, nil
@@ -333,6 +333,18 @@ func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
 		spaceResp.SpaceStatus = startResp.Data.SpaceStatus
 		return &spaceResp, nil
 	}
+}
+
+func roundToOneDecimalPlace(data string) string {
+	var result string
+	dotIndex := strings.Index(data, ".")
+	if dotIndex == -1 {
+		result = "0.0"
+
+	} else {
+		result = data[:dotIndex] + data[dotIndex:3]
+	}
+	return result
 }
 
 type SpaceResp struct {

@@ -249,7 +249,7 @@ var taskDelete = &cli.Command{
 		}
 
 		spaceUuid := strings.ToLower(cctx.Args().First())
-		jobDetail, err := computing.RetrieveJobMetadata(strings.ToLower(cctx.Args().First()))
+		jobDetail, err := computing.RetrieveJobMetadata(spaceUuid)
 		if err != nil {
 			return fmt.Errorf("failed get job detail: %s, error: %+v", spaceUuid, err)
 		}

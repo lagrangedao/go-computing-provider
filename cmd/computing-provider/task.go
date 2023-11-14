@@ -118,15 +118,24 @@ var taskList = &cli.Command{
 
 			var rowColor []tablewriter.Colors
 			if status == "Pending" {
-				rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgYellowColor}, {tablewriter.Bold, tablewriter.FgWhiteColor}}
+				rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgYellowColor}}
 			} else if status == "Running" {
-				rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgGreenColor}, {tablewriter.Bold, tablewriter.FgWhiteColor}}
+				rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgGreenColor}}
 			} else {
-				rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgRedColor}, {tablewriter.Bold, tablewriter.FgWhiteColor}}
+				rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgRedColor}}
 			}
+
+			if spaceStatus == "Deploying" {
+				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgYellowColor})
+			} else if spaceStatus == "Running" {
+				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgGreenColor})
+			} else if spaceStatus == "Stopped" {
+				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgRedColor})
+			}
+
 			rowColorList = append(rowColorList, RowColor{
 				row:    number,
-				column: []int{5},
+				column: []int{5, 6},
 				color:  rowColor,
 			})
 
@@ -227,7 +236,7 @@ var taskDelete = &cli.Command{
 	Usage:     "Delete an task from the k8s",
 	ArgsUsage: "[space_uuid]",
 	Action: func(cctx *cli.Context) error {
-		if cctx.NArg() != 2 {
+		if cctx.NArg() != 1 {
 			return fmt.Errorf("incorrect number of arguments, got %d, missing args: space_uuid", cctx.NArg())
 		}
 
@@ -318,9 +327,9 @@ func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
 			return &spaceResp, nil
 		}
 	} else {
-		spaceResp.PaymentAmount = strconv.FormatFloat(startResp.Data.PaymentAmount, 'f', -1, 64)
-		spaceResp.RemainingTime = strconv.FormatFloat(startResp.Data.RemainingTime, 'f', -1, 64) + " h"
-		spaceResp.RunningTime = strconv.FormatFloat(startResp.Data.RunningTime, 'f', -1, 64) + " h"
+		spaceResp.PaymentAmount = strconv.FormatFloat(startResp.Data.PaymentAmount, 'f', 1, 64)
+		spaceResp.RemainingTime = strconv.FormatFloat(startResp.Data.RemainingTime, 'f', 1, 64) + " h"
+		spaceResp.RunningTime = strconv.FormatFloat(startResp.Data.RunningTime, 'f', 1, 64) + " h"
 		spaceResp.SpaceStatus = startResp.Data.SpaceStatus
 		return &spaceResp, nil
 	}

@@ -84,14 +84,14 @@ var taskList = &cli.Command{
 				if err != nil {
 					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 				} else {
-					spaceStatus = spaceInfo.SpaceStatus
-					if spaceInfo.RunningTime != "" {
-						rtd = spaceInfo.RunningTime + " h"
+					spaceStatus = spaceInfo.Data.SpaceStatus
+					if spaceInfo.Data.RunningTime != "" {
+						rtd = spaceInfo.Data.RunningTime + " h"
 					}
-					if spaceInfo.RemainingTime != "" {
-						et = spaceInfo.RemainingTime + " h"
+					if spaceInfo.Data.RemainingTime != "" {
+						et = spaceInfo.Data.RemainingTime + " h"
 					}
-					rewards = spaceInfo.PaymentAmount
+					rewards = spaceInfo.Data.PaymentAmount
 				}
 			}
 
@@ -168,7 +168,6 @@ var taskDetail = &cli.Command{
 		if err != nil {
 			return fmt.Errorf("failed get job detail: %s, error: %+v", spaceUuid, err)
 		}
-		et := time.Unix(jobDetail.ExpireTime, 0).Format("2006-01-02 15:04:05")
 
 		k8sService := computing.NewK8sService()
 		status, err := k8sService.GetDeploymentStatus(jobDetail.WalletAddress, jobDetail.SpaceUuid)
@@ -177,7 +176,7 @@ var taskDetail = &cli.Command{
 		}
 
 		var fullSpaceUuid string
-		var rtd, rewards string
+		var rtd, et, rewards string
 		if len(jobDetail.DeployName) > 0 {
 			fullSpaceUuid = jobDetail.DeployName[7:]
 		}
@@ -187,13 +186,13 @@ var taskDetail = &cli.Command{
 			if err != nil {
 				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 			} else {
-				if spaceInfo.RunningTime != "" {
-					rtd = spaceInfo.RunningTime + " h"
+				if spaceInfo.Data.RunningTime != "" {
+					rtd = spaceInfo.Data.RunningTime + " h"
 				}
-				if spaceInfo.RemainingTime != "" {
-					et = spaceInfo.RemainingTime + " h"
+				if spaceInfo.Data.RemainingTime != "" {
+					et = spaceInfo.Data.RemainingTime + " h"
 				}
-				rewards = spaceInfo.PaymentAmount
+				rewards = spaceInfo.Data.PaymentAmount
 			}
 		}
 
@@ -268,14 +267,7 @@ var taskDelete = &cli.Command{
 	},
 }
 
-type ApiResponse struct {
-	PaymentAmount string `json:"payment_amount"`
-	RunningTime   string `json:"running_time"`
-	SpaceStatus   string `json:"space_status"`
-	RemainingTime string `json:"remaining_time"`
-}
-
-func getSpaceInfoResponse(nodeID, spaceUUID string) (*ApiResponse, error) {
+func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
 	url := fmt.Sprintf("%s/cp/%s/%s", conf.GetConfig().LAG.ServerUrl, nodeID, spaceUUID)
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -298,10 +290,23 @@ func getSpaceInfoResponse(nodeID, spaceUUID string) (*ApiResponse, error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	var apiResponse ApiResponse
-	err = json.Unmarshal(body, &apiResponse)
+	var spaceResp SpaceResp
+	err = json.Unmarshal(body, &spaceResp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %v", err)
 	}
-	return &apiResponse, nil
+	return &spaceResp, nil
+}
+
+type SpaceResp struct {
+	Data    ApiResponse `json:"data"`
+	Message string      `json:"message"`
+	Status  string      `json:"status"`
+}
+
+type ApiResponse struct {
+	PaymentAmount string `json:"payment_amount"`
+	RunningTime   string `json:"running_time"`
+	SpaceStatus   string `json:"space_status"`
+	RemainingTime string `json:"remaining_time"`
 }

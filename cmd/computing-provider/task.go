@@ -248,10 +248,14 @@ var taskDelete = &cli.Command{
 			return fmt.Errorf("load config file failed, error: %+v", err)
 		}
 
-		namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(cctx.Args().First())
-		deployName := cctx.Args().Get(1)
-		spaceUuid := strings.ReplaceAll(deployName, constants.K8S_DEPLOY_NAME_PREFIX, "")
+		spaceUuid := strings.ToLower(cctx.Args().First())
+		jobDetail, err := computing.RetrieveJobMetadata(strings.ToLower(cctx.Args().First()))
+		if err != nil {
+			return fmt.Errorf("failed get job detail: %s, error: %+v", spaceUuid, err)
+		}
 
+		deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid
+		namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobDetail.WalletAddress)
 		k8sService := computing.NewK8sService()
 		if err := k8sService.DeleteDeployment(context.TODO(), namespace, deployName); err != nil && !errors.IsNotFound(err) {
 			return err

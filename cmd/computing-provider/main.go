@@ -26,6 +26,7 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			runCmd,
+			taskCmd,
 		},
 	}
 	app.Setup()

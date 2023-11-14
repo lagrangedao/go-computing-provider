@@ -110,20 +110,20 @@ func submitJob(jobData *models.JobData) error {
 		return err
 	}
 
-	//storageService := NewStorageService()
-	//mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
-	//if err != nil {
-	//	logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
-	//	return err
-	//}
-	//logs.GetLogger().Infof("jobuuid: %s successfully submitted to IPFS", jobData.UUID)
-	//
-	//gatewayUrl, err := storageService.GetGatewayUrl()
-	//if err != nil {
-	//	logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
-	//	return err
-	//}
-	//jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
+	storageService := NewStorageService()
+	mcsOssFile, err := storageService.UploadFileToBucket(jobDetailFile, taskDetailFilePath, true)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed upload file to bucket, error: %v", err)
+		return err
+	}
+	logs.GetLogger().Infof("jobuuid: %s successfully submitted to IPFS", jobData.UUID)
+
+	gatewayUrl, err := storageService.GetGatewayUrl()
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get mcs ipfs gatewayUrl, error: %v", err)
+		return err
+	}
+	jobData.JobResultURI = *gatewayUrl + "/ipfs/" + mcsOssFile.PayloadCid
 	jobData.JobResultURI = ""
 	return nil
 }
@@ -239,7 +239,6 @@ func ReNewJob(c *gin.Context) {
 			"job_uuid":       spaceDetail.JobUuid,
 			"task_type":      spaceDetail.TaskType,
 			"deploy_name":    spaceDetail.DeployName,
-			"rewards":        spaceDetail.Rewards,
 			"hardware":       spaceDetail.Hardware,
 		}
 
@@ -256,22 +255,15 @@ func ReNewJob(c *gin.Context) {
 }
 
 func DeleteJob(c *gin.Context) {
-	creatorWallet := c.Query("creator_wallet")
 	spaceUuid := c.Query("space_uuid")
 
-	if creatorWallet == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
-		return
-	}
 	if spaceUuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "space_uuid is required"})
 		return
 	}
 
-	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
-
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
-	spaceDetail, err := RetrieveJobMetadata(redisKey)
+	jobDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		if stErr.Is(err, NotFoundRedisKey) {
 			c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
@@ -281,7 +273,8 @@ func DeleteJob(c *gin.Context) {
 			return
 		}
 	}
-	deleteJob(creatorWallet, k8sNameSpace, spaceUuid, spaceDetail.SpaceName)
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobDetail.WalletAddress)
+	deleteJob(k8sNameSpace, spaceUuid)
 	c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
 }
 
@@ -390,7 +383,16 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 
 func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
 	updateJobStatus(jobUuid, models.JobUploadResult)
+
+	var success bool
+	var spaceUuid string
+	var walletAddress string
 	defer func() {
+		if !success {
+			k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress)
+			deleteJob(k8sNameSpace, spaceUuid)
+		}
+
 		if err := recover(); err != nil {
 			logs.GetLogger().Errorf("deploy space task painc, error: %+v", err)
 			return
@@ -431,9 +433,9 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		return ""
 	}
 
-	walletAddress := spaceJson.Data.Owner.PublicAddress
+	walletAddress = spaceJson.Data.Owner.PublicAddress
 	spaceName := spaceJson.Data.Space.Name
-	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
+	spaceUuid = strings.ToLower(spaceJson.Data.Space.Uuid)
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
 
 	conn := redisPool.Get()
@@ -493,10 +495,12 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath)
 		deploy.WithDockerfile(imageName, dockerfilePath).DockerfileToK8s()
 	}
+	success = true
+
 	return hostName
 }
 
-func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) error {
+func deleteJob(namespace, spaceUuid string) error {
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceUuid
 	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceUuid
@@ -677,7 +681,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	}
 
 	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid", "job_uuid",
-		"task_type", "deploy_name", "rewards", "hardware")
+		"task_type", "deploy_name", "hardware", "url")
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
@@ -692,8 +696,8 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		jobUuid       string
 		taskType      string
 		deployName    string
-		rewards       string
 		hardware      string
+		url           string
 	)
 
 	if len(valuesStr) >= 3 {
@@ -704,9 +708,8 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		jobUuid = valuesStr[4]
 		taskType = valuesStr[5]
 		deployName = valuesStr[6]
-		rewards = valuesStr[7]
-		hardware = valuesStr[8]
-
+		hardware = valuesStr[7]
+		url = valuesStr[8]
 		expireTime, err = strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
@@ -722,7 +725,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		JobUuid:       jobUuid,
 		TaskType:      taskType,
 		DeployName:    deployName,
-		Rewards:       rewards,
 		Hardware:      hardware,
+		Url:           url,
 	}, nil
 }

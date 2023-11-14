@@ -14,7 +14,7 @@ GOFLAGS+=-ldflags="$(ldflags)"
 all: build
 .PHONY: all
 
-build: get-model computing-provider cp-cli
+build: get-model computing-provider
 .PHONY: build
 
 get-model: check_path
@@ -38,17 +38,10 @@ computing-provider:
 	$(GOCC) build $(GOFLAGS) -o computing-provider ./cmd/computing-provider
 .PHONY: computing-provider
 
-cp-cli:
-	rm -rf cp-cli
-	$(GOCC) build $(GOFLAGS) -o cp-cli ./cmd/cp-cli
-.PHONY: cp-cli
-
 install:
 	sudo install -C computing-provider /usr/local/bin/computing-provider
-	sudo install -C cp-cli /usr/local/bin/cp-cli
 
 clean:
 	rm -rf $(cpRepo)/inference-model
 	sudo rm -rf /usr/local/bin/computing-provider
-	sudo rm -rf /usr/local/bin/cp-cli
 .PHONY: clean

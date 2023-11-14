@@ -15,14 +15,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
 
 var taskCmd = &cli.Command{
 	Name:  "task",
-	Usage: "Manage tasks with cp-cli",
+	Usage: "Manage tasks",
 	Subcommands: []*cli.Command{
 		taskList,
 		taskDetail,
@@ -35,8 +34,8 @@ var taskList = &cli.Command{
 	Usage: "List task",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
-			Name:    "verpose",
-			Usage:   "--verpose",
+			Name:    "verbose",
+			Usage:   "--verbose",
 			Aliases: []string{"v"},
 		},
 	},
@@ -67,7 +66,6 @@ var taskList = &cli.Command{
 			if err != nil {
 				return fmt.Errorf("failed get job detail: %s, error: %+v", key, err)
 			}
-			et := time.Unix(jobDetail.ExpireTime, 0).Format("2006-01-02 15:04:05")
 
 			k8sService := computing.NewK8sService()
 			status, err := k8sService.GetDeploymentStatus(jobDetail.WalletAddress, jobDetail.SpaceUuid)
@@ -76,7 +74,7 @@ var taskList = &cli.Command{
 			}
 
 			var fullSpaceUuid string
-			var spaceStatus, rtd, rewards string
+			var spaceStatus, rtd, rewards, et string
 			if len(jobDetail.DeployName) > 0 {
 				fullSpaceUuid = jobDetail.DeployName[7:]
 			}
@@ -87,8 +85,9 @@ var taskList = &cli.Command{
 					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 				} else {
 					spaceStatus = spaceInfo.SpaceStatus
-					rtd = strconv.Itoa(spaceInfo.RunningTime) + "(h)"
-					rewards = strconv.Itoa(spaceInfo.PaymentAmount)
+					rtd = spaceInfo.RunningTime + " h"
+					et = spaceInfo.RemainingTime + " h"
+					rewards = spaceInfo.PaymentAmount
 				}
 			}
 
@@ -99,23 +98,21 @@ var taskList = &cli.Command{
 
 				var walletAddress string
 				if len(jobDetail.WalletAddress) > 0 {
-					walletAddress = jobDetail.WalletAddress[24:]
+					walletAddress = jobDetail.WalletAddress[:5] + "..." + jobDetail.WalletAddress[37:]
 				}
 
 				var jobUuid string
 				if len(jobDetail.JobUuid) > 0 {
-					jobUuid = jobDetail.JobUuid[24:]
+					jobUuid = "..." + jobDetail.JobUuid[26:]
 				}
 
 				var spaceUuid string
-				var deployName string
-				if len(jobDetail.DeployName) > 0 {
-					spaceUuid = jobDetail.DeployName[:15]
-					deployName = jobDetail.DeployName[32:]
+				if len(jobDetail.SpaceUuid) > 0 {
+					spaceUuid = "..." + jobDetail.SpaceUuid[26:]
 				}
 
 				taskData = append(taskData,
-					[]string{jobUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, deployName, status, spaceStatus, rtd, et, rewards})
+					[]string{jobUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
 			}
 
 			var rowColor []tablewriter.Colors
@@ -128,14 +125,14 @@ var taskList = &cli.Command{
 			}
 			rowColorList = append(rowColorList, RowColor{
 				row:    number,
-				column: []int{6},
+				column: []int{5},
 				color:  rowColor,
 			})
 
 			number++
 		}
 
-		header := []string{"TASK UUID", "TASK TYPE", "WALLET ADDRESS", "SPACE UUID", "SPACE NAME", "DEPLOY NAME", "STATUS", "SPACE STATUS", "RTD", "ET", "REWARDS"}
+		header := []string{"TASK UUID", "TASK TYPE", "WALLET ADDRESS", "SPACE UUID", "SPACE NAME", "STATUS", "SPACE STATUS", "RUNNING TIME", "REMAINING TIME", "REWARDS"}
 
 		NewVisualTable(header, taskData, rowColorList).Generate()
 
@@ -147,10 +144,10 @@ var taskList = &cli.Command{
 var taskDetail = &cli.Command{
 	Name:      "get",
 	Usage:     "Get task detail info",
-	ArgsUsage: "[space uuid]",
+	ArgsUsage: "[space_uuid]",
 	Action: func(cctx *cli.Context) error {
 		if cctx.NArg() != 1 {
-			return fmt.Errorf("incorrect number of arguments, got %d", cctx.NArg())
+			return fmt.Errorf("incorrect number of arguments, got %d, missing args: space_uuid", cctx.NArg())
 		}
 
 		cpPath, exit := os.LookupEnv("CP_PATH")
@@ -186,8 +183,9 @@ var taskDetail = &cli.Command{
 			if err != nil {
 				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
 			} else {
-				rtd = strconv.Itoa(spaceInfo.RunningTime) + "(h)"
-				rewards = strconv.Itoa(spaceInfo.PaymentAmount)
+				rtd = spaceInfo.RunningTime + " h"
+				et = spaceInfo.RemainingTime + " h"
+				rewards = spaceInfo.PaymentAmount
 			}
 		}
 
@@ -195,12 +193,12 @@ var taskDetail = &cli.Command{
 		taskData = append(taskData, []string{"TASK TYPE:", jobDetail.TaskType})
 		taskData = append(taskData, []string{"WALLET ADDRESS:", jobDetail.WalletAddress})
 		taskData = append(taskData, []string{"SPACE NAME:", jobDetail.SpaceName})
+		taskData = append(taskData, []string{"SPACE URL:", jobDetail.Url})
 		taskData = append(taskData, []string{"REWARD:", rewards})
 		taskData = append(taskData, []string{"HARDWARE:", jobDetail.Hardware})
 		taskData = append(taskData, []string{"STATUS:", status})
-		taskData = append(taskData, []string{"DEPLOY NAME:", jobDetail.DeployName})
-		taskData = append(taskData, []string{"RTD:", rtd})
-		taskData = append(taskData, []string{"ET:", et})
+		taskData = append(taskData, []string{"RUNNING TIME:", rtd})
+		taskData = append(taskData, []string{"REMAINING TIME:", et})
 
 		var rowColor []tablewriter.Colors
 		if status == "Pending" {
@@ -215,7 +213,7 @@ var taskDetail = &cli.Command{
 
 		var rowColorList []RowColor
 		rowColorList = append(rowColorList, RowColor{
-			row:    5,
+			row:    6,
 			column: []int{1},
 			color:  rowColor,
 		})
@@ -227,10 +225,10 @@ var taskDetail = &cli.Command{
 var taskDelete = &cli.Command{
 	Name:      "delete",
 	Usage:     "Delete an task from the k8s",
-	ArgsUsage: "[WalletAddress deploy-name]",
+	ArgsUsage: "[space_uuid]",
 	Action: func(cctx *cli.Context) error {
 		if cctx.NArg() != 2 {
-			return fmt.Errorf("incorrect number of arguments, got %d", cctx.NArg())
+			return fmt.Errorf("incorrect number of arguments, got %d, missing args: space_uuid", cctx.NArg())
 		}
 
 		cpPath, exit := os.LookupEnv("CP_PATH")
@@ -263,9 +261,10 @@ var taskDelete = &cli.Command{
 }
 
 type ApiResponse struct {
-	PaymentAmount int    `json:"payment_amount"`
-	RunningTime   int    `json:"running_time"`
+	PaymentAmount string `json:"payment_amount"`
+	RunningTime   string `json:"running_time"`
 	SpaceStatus   string `json:"space_status"`
+	RemainingTime string `json:"remaining_time"`
 }
 
 func getSpaceInfoResponse(nodeID, spaceUUID string) (*ApiResponse, error) {

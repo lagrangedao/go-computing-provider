@@ -271,7 +271,7 @@ func watchExpiredTask() {
 						namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
 						expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
 						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s,expireTime: %s. the job starting terminated", key, namespace, expireTimeStr)
-						if err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName); err == nil {
+						if err = deleteJob(namespace, jobMetadata.SpaceUuid); err == nil {
 							deleteKey = append(deleteKey, key)
 						}
 					}

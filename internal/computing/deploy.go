@@ -95,7 +95,7 @@ func (d *Deploy) DockerfileToK8s() {
 		return
 	}
 
-	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
+	deleteJob(d.k8sNameSpace, d.spaceUuid)
 
 	if err := d.deployNamespace(); err != nil {
 		logs.GetLogger().Error(err)
@@ -164,7 +164,7 @@ func (d *Deploy) YamlToK8s() {
 		return
 	}
 
-	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
+	deleteJob(d.k8sNameSpace, d.spaceUuid)
 
 	if err := d.deployNamespace(); err != nil {
 		logs.GetLogger().Error(err)
@@ -350,7 +350,7 @@ func (d *Deploy) ModelInferenceToK8s() error {
 		return err
 	}
 
-	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
+	deleteJob(d.k8sNameSpace, d.spaceUuid)
 	imageName := "lagrange/" + modelInfo.Framework + ":v1.0"
 
 	logFile := filepath.Join(d.SpacePath, BuildFileName)
@@ -560,6 +560,7 @@ func (d *Deploy) watchContainerRunningTime() {
 		"task_type":      d.TaskType,
 		"deploy_name":    d.DeployName,
 		"hardware":       d.hardwareDesc,
+		"url":            fmt.Sprintf("https://%s", d.hostName),
 	}
 
 	for key, val := range fields {

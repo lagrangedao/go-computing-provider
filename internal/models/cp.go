@@ -110,6 +110,6 @@ type CacheSpaceDetail struct {
 	JobUuid       string
 	TaskType      string
 	DeployName    string
-	Rewards       string
 	Hardware      string
+	Url           string
 }

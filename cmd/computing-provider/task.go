@@ -342,7 +342,7 @@ func roundToOneDecimalPlace(data string) string {
 		result = "0.0"
 
 	} else {
-		result = data[:dotIndex] + data[dotIndex:3]
+		result = data[:dotIndex] + data[dotIndex:dotIndex+2]
 	}
 	return result
 }

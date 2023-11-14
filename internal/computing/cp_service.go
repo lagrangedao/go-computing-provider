@@ -16,9 +16,11 @@ import (
 	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"github.com/lagrangedao/go-computing-provider/util"
 	"io"
+	coreV1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"math/rand"
 	"net/http"
 	"os"
@@ -331,6 +333,94 @@ func GetSpaceLog(c *gin.Context) {
 	}
 	defer conn.Close()
 	handleConnection(conn, spaceDetail, logType)
+}
+
+func DoProof(c *gin.Context) {
+	var proofTask struct {
+		Method    string
+		BlockData string
+		Exp       int64
+	}
+	if err := c.ShouldBindJSON(&proofTask); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	logs.GetLogger().Infof("do proof task received: %+v", proofTask)
+
+	if strings.TrimSpace(proofTask.Method) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: method"})
+		return
+	}
+	if proofTask.Method != "mine" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "method must be mine"})
+		return
+	}
+	if proofTask.Exp < 200 || proofTask.Exp > 300 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "exp range is [200~300]"})
+		return
+	}
+
+	k8sService := NewK8sService()
+	taskPod := &coreV1.Pod{
+		TypeMeta: metaV1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "proof-pod-" + generateString(5),
+		},
+		Spec: coreV1.PodSpec{
+			Containers: []coreV1.Container{{
+				Name:            "proof-container" + generateString(5),
+				Image:           "filswan/woker-proof:v1.0",
+				ImagePullPolicy: coreV1.PullIfNotPresent,
+				Env: []coreV1.EnvVar{
+					{
+						Name:  "METHOD",
+						Value: proofTask.Method,
+					},
+					{
+						Name:  "BLOCK_DATA",
+						Value: proofTask.BlockData,
+					},
+					{
+						Name:  "EXP",
+						Value: strconv.Itoa(int(proofTask.Exp)),
+					},
+				},
+			}},
+		}}
+
+	createPod, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).Create(context.TODO(), taskPod, metaV1.CreateOptions{})
+	if err != nil {
+		logs.GetLogger().Errorf("Failed creating Pod: %v", err)
+		return
+	}
+
+	err = wait.PollImmediate(time.Second*5, time.Minute*10, func() (bool, error) {
+		pod, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).Get(context.TODO(), createPod.Name, metaV1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		return pod.Status.Phase == v1.PodRunning, nil
+	})
+
+	if err != nil {
+		logs.GetLogger().Errorf("Failed waiting for Pod to run: %v", err)
+		return
+	}
+
+	podLogOptions := v1.PodLogOptions{}
+	podLogs, err := k8sService.k8sClient.CoreV1().Pods(createPod.Namespace).GetLogs(createPod.Name, &podLogOptions).Stream(context.TODO())
+	if err != nil {
+		logs.GetLogger().Errorf("Failed gettingPod logs: %v", err)
+		return
+	}
+	defer podLogs.Close()
+
+	buf := new(strings.Builder)
+	io.Copy(buf, podLogs)
+	c.JSON(http.StatusOK, util.CreateSuccessResponse(buf.String()))
 }
 
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {

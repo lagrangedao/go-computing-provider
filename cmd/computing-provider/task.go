@@ -247,6 +247,7 @@ var taskDelete = &cli.Command{
 		if err := conf.InitConfig(cpPath); err != nil {
 			return fmt.Errorf("load config file failed, error: %+v", err)
 		}
+		computing.GetRedisClient()
 
 		spaceUuid := strings.ToLower(cctx.Args().First())
 		jobDetail, err := computing.RetrieveJobMetadata(spaceUuid)

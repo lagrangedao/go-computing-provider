@@ -16,8 +16,8 @@ A computing provider is an individual or organization that participates in the d
  - [Install the Hardware resource-exporter](#Install-the-Hardware-resource-exporter)
  - [Install the Redis service](#Install-the-Redis-service)
  - [Build and config the Computing Provider](#Build-and-config-the-Computing-Provider)
- - [Start the Computing Provider](#Start-the-Computing-Provider) 
-
+ - [Start the Computing Provider](#Start-the-Computing-Provider)
+ - [CLI of Computing Provider](#CLI-of-Computing-Provider)
 
 ## Prerequisites
 Before you install the Computing Provider, you need to know there are some resources required:
@@ -360,3 +360,17 @@ For usage questions or issues reach out to the Filswan team either in the [Disco
 ## License
 
 Apache
+
+## CLI of Computing Provider
+* Check the current list of tasks running on CP, display detailed information for tasks using `-v` :
+```
+computing-provider task list 
+```
+* Retrieve detailed information for a specific task using `space_uuid` :
+```
+computing-provider task get [space_uuid]
+```
+* Delete mismatched or failed tasks by `space_uuid`:
+```
+computing-provider task delete [space_uuid]
+```

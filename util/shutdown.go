@@ -1,4 +1,4 @@
-package common
+package util
 
 import (
 	"context"
@@ -64,7 +64,7 @@ func ServeHttp(h http.Handler, name string, addr string) (StopFunc, error) {
 		certFile := conf.GetConfig().LOG.CrtFile
 		keyFile := conf.GetConfig().LOG.KeyFile
 		if _, err := os.Stat(certFile); err != nil {
-			logs.GetLogger().Fatalf("need to configure the wss authentication certificate.")
+			logs.GetLogger().Fatalf("need to manually generate the wss authentication certificate.")
 			return
 		}
 

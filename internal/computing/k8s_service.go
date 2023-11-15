@@ -7,7 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/models"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"io"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -100,6 +100,22 @@ func (s *K8sService) DeleteDeployRs(ctx context.Context, namespace, spaceUuid st
 	return s.k8sClient.AppsV1().ReplicaSets(namespace).DeleteCollection(ctx, *metaV1.NewDeleteOptions(0), metaV1.ListOptions{
 		LabelSelector: fmt.Sprintf("lad_app=%s", spaceUuid),
 	})
+}
+
+func (s *K8sService) GetDeploymentStatus(namespace, spaceUuid string) (string, error) {
+	namespace = constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(namespace)
+	podList, err := s.k8sClient.CoreV1().Pods(namespace).List(context.TODO(), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("lad_app=%s", spaceUuid),
+	})
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return "", err
+	}
+
+	if len(podList.Items) > 0 {
+		return string(podList.Items[0].Status.Phase), nil
+	}
+	return "", nil
 }
 
 func (s *K8sService) GetDeploymentImages(ctx context.Context, namespace, deploymentName string) ([]string, error) {
@@ -404,7 +420,7 @@ func (s *K8sService) GetPodLog(ctx context.Context) (map[string]*strings.Builder
 		req := s.k8sClient.CoreV1().Pods("kube-system").GetLogs(pod.Name, &podLogOptions)
 		buf, err := readLog(req)
 		if err != nil {
-			logs.GetLogger().Errorf("collect gpu log, podName: %s, error: %+v", pod.Name, err)
+			logs.GetLogger().Errorf("collect gpu log, nodeName: %s, please check resource-exporter pod status. error: %+v", pod.Spec.NodeName, err)
 			continue
 		}
 		result[pod.Spec.NodeName] = buf

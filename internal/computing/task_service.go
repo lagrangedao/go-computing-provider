@@ -8,8 +8,8 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/models"
+	models2 "github.com/lagrangedao/go-computing-provider/internal/models"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 	"strings"
@@ -18,7 +18,7 @@ import (
 )
 
 var runTaskGpuResource sync.Map
-var deployingChan = make(chan models.Job)
+var deployingChan = make(chan models2.Job)
 
 type ScheduleTask struct {
 	TaskMap sync.Map
@@ -35,7 +35,7 @@ func (s *ScheduleTask) Run() {
 			select {
 			case <-ticker.C:
 				s.TaskMap.Range(func(key, value any) bool {
-					job := value.(*models.Job)
+					job := value.(*models2.Job)
 					job.Count++
 					s.TaskMap.Store(job.Uuid, job)
 
@@ -44,7 +44,7 @@ func (s *ScheduleTask) Run() {
 						return true
 					}
 
-					if job.Status != models.JobDeployToK8s {
+					if job.Status != models2.JobDeployToK8s {
 						return true
 					}
 
@@ -70,7 +70,7 @@ func (s *ScheduleTask) Run() {
 		case <-time.After(15 * time.Second):
 			s.TaskMap.Range(func(key, value any) bool {
 				jobUuid := key.(string)
-				job := value.(*models.Job)
+				job := value.(*models2.Job)
 				reportJobStatus(jobUuid, job.Status)
 				return true
 			})
@@ -78,7 +78,7 @@ func (s *ScheduleTask) Run() {
 	}
 }
 
-func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
+func reportJobStatus(jobUuid string, jobStatus models2.JobStatus) {
 	reqParam := map[string]interface{}{
 		"job_uuid": jobUuid,
 		"status":   jobStatus,
@@ -110,10 +110,12 @@ func reportJobStatus(jobUuid string, jobStatus models.JobStatus) {
 	if resp.StatusCode != http.StatusOK {
 		return
 	}
+
+	logs.GetLogger().Debugf("report job status successfully. uuid: %s, status: %s", jobUuid, jobStatus)
 	return
 }
 
-func RunSyncTask() {
+func RunSyncTask(nodeId string) {
 	go func() {
 		k8sService := NewK8sService()
 		nodes, err := k8sService.k8sClient.CoreV1().Nodes().List(context.TODO(), metaV1.ListOptions{})
@@ -133,7 +135,7 @@ func RunSyncTask() {
 			cpNode := node
 			if gpu, ok := nodeGpuInfoMap[cpNode.Name]; ok {
 				var gpuInfo struct {
-					Gpu models.Gpu `json:"gpu"`
+					Gpu models2.Gpu `json:"gpu"`
 				}
 				if err = json.Unmarshal([]byte(gpu.String()), &gpuInfo); err != nil {
 					logs.GetLogger().Errorf("convert to json, nodeName %s, error: %+v", cpNode.Name, err)
@@ -160,7 +162,6 @@ func RunSyncTask() {
 		if err != nil {
 			logs.GetLogger().Error(err)
 		}
-		nodeId, _, _ := generateNodeID()
 
 		ticker := time.NewTicker(10 * time.Second)
 		defer ticker.Stop()
@@ -180,8 +181,7 @@ func RunSyncTask() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 
-		logs.GetLogger().Infof("provider status: %s", models.ActiveStatus)
-		nodeId, _, _ := generateNodeID()
+		logs.GetLogger().Infof("provider status: %s", models2.ActiveStatus)
 
 		for range ticker.C {
 			providerStatus, err := checkClusterProviderStatus()
@@ -189,7 +189,7 @@ func RunSyncTask() {
 				logs.GetLogger().Errorf("check cluster resource failed, error: %+v", err)
 				return
 			}
-			if providerStatus == models.InactiveStatus {
+			if providerStatus == models2.InactiveStatus {
 				logs.GetLogger().Infof("provider status: %s", providerStatus)
 			}
 			updateProviderInfo(nodeId, "", "", providerStatus)
@@ -208,7 +208,7 @@ func reportClusterResource(location, nodeId string) {
 		logs.GetLogger().Errorf("Failed k8s statistical sources, error: %+v", err)
 		return
 	}
-	clusterSource := models.ClusterResource{
+	clusterSource := models2.ClusterResource{
 		NodeId:      nodeId,
 		Region:      location,
 		ClusterInfo: statisticalSources,
@@ -262,7 +262,7 @@ func watchExpiredTask() {
 					return
 				}
 				for _, key := range keys {
-					jobMetadata, err := retrieveJobMetadata(key)
+					jobMetadata, err := RetrieveJobMetadata(key)
 					if err != nil {
 						logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
 						return
@@ -272,9 +272,18 @@ func watchExpiredTask() {
 						namespace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
 						expireTimeStr := time.Unix(jobMetadata.ExpireTime, 0).Format("2006-01-02 15:04:05")
 						logs.GetLogger().Infof("<timer-task> redis-key: %s, namespace: %s,expireTime: %s. the job starting terminated", key, namespace, expireTimeStr)
-						if err = deleteJob(jobMetadata.WalletAddress, namespace, jobMetadata.SpaceUuid, jobMetadata.SpaceName); err == nil {
+						if err = deleteJob(namespace, jobMetadata.SpaceUuid); err == nil {
 							deleteKey = append(deleteKey, key)
+							continue
 						}
+					}
+
+					k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobMetadata.WalletAddress)
+					deployName := constants.K8S_DEPLOY_NAME_PREFIX + jobMetadata.SpaceUuid
+					service := NewK8sService()
+					if _, err = service.k8sClient.AppsV1().Deployments(k8sNameSpace).Get(context.TODO(), deployName, metaV1.GetOptions{}); err != nil && errors.IsNotFound(err) {
+						deleteKey = append(deleteKey, key)
+						continue
 					}
 				}
 				conn.Do("DEL", redis.Args{}.AddFlat(deleteKey)...)
@@ -316,7 +325,7 @@ func watchNameSpaceForDeleted() {
 						}
 					}
 				}
-				docker.NewDockerService().CleanResource()
+				NewDockerService().CleanResource()
 			}()
 		}
 	}()

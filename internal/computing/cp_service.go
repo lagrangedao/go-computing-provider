@@ -10,15 +10,17 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/lagrangedao/go-computing-provider/common"
+	"github.com/lagrangedao/go-computing-provider/build"
 	"github.com/lagrangedao/go-computing-provider/conf"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/models"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
+	"github.com/lagrangedao/go-computing-provider/util"
 	"io"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"math/rand"
 	"net/http"
 	"os"
@@ -32,11 +34,11 @@ import (
 
 func GetServiceProviderInfo(c *gin.Context) {
 	info := new(models.HostInfo)
-	//info.SwanProviderVersion = common.GetVersion()
+	info.SwanProviderVersion = build.UserVersion()
 	info.OperatingSystem = runtime.GOOS
 	info.Architecture = runtime.GOARCH
 	info.CPUCores = runtime.NumCPU()
-	c.JSON(http.StatusOK, common.CreateSuccessResponse(info))
+	c.JSON(http.StatusOK, util.CreateSuccessResponse(info))
 }
 
 func ReceiveJob(c *gin.Context) {
@@ -215,7 +217,7 @@ func ReNewJob(c *gin.Context) {
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + jobData.SpaceUuid
-	spaceDetail, err := retrieveJobMetadata(redisKey)
+	spaceDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "not found data"})
 		return
@@ -235,7 +237,12 @@ func ReNewJob(c *gin.Context) {
 			"space_name":     spaceDetail.SpaceName,
 			"expire_time":    strconv.Itoa(int(time.Now().Unix()) + int(leftTime) + jobData.Duration),
 			"space_uuid":     spaceDetail.SpaceUuid,
+			"job_uuid":       spaceDetail.JobUuid,
+			"task_type":      spaceDetail.TaskType,
+			"deploy_name":    spaceDetail.DeployName,
+			"hardware":       spaceDetail.Hardware,
 		}
+
 		for key, val := range fields {
 			fullArgs = append(fullArgs, key, val)
 		}
@@ -245,37 +252,31 @@ func ReNewJob(c *gin.Context) {
 		redisConn.Do("HSET", fullArgs...)
 		redisConn.Do("SET", jobData.SpaceUuid, "wait-delete", "EX", int(leftTime)+jobData.Duration)
 	}
-	c.JSON(http.StatusOK, common.CreateSuccessResponse("success"))
+	c.JSON(http.StatusOK, util.CreateSuccessResponse("success"))
 }
 
 func DeleteJob(c *gin.Context) {
-	creatorWallet := c.Query("creator_wallet")
 	spaceUuid := c.Query("space_uuid")
 
-	if creatorWallet == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
-		return
-	}
 	if spaceUuid == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "space_uuid is required"})
 		return
 	}
 
-	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(creatorWallet)
-
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
-	spaceDetail, err := retrieveJobMetadata(redisKey)
+	jobDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		if stErr.Is(err, NotFoundRedisKey) {
-			c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
+			c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
 			return
 		} else {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
 			return
 		}
 	}
-	deleteJob(creatorWallet, k8sNameSpace, spaceUuid, spaceDetail.SpaceName)
-	c.JSON(http.StatusOK, common.CreateSuccessResponse("deleted success"))
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobDetail.WalletAddress)
+	deleteJob(k8sNameSpace, spaceUuid)
+	c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
 }
 
 func StatisticalSources(c *gin.Context) {
@@ -293,9 +294,7 @@ func StatisticalSources(c *gin.Context) {
 		return
 	}
 
-	nodeID, _, _ := generateNodeID()
 	c.JSON(http.StatusOK, models.ClusterResource{
-		NodeId:      nodeID,
 		Region:      location,
 		ClusterInfo: statisticalSources,
 	})
@@ -320,7 +319,7 @@ func GetSpaceLog(c *gin.Context) {
 	}
 
 	redisKey := constants.REDIS_FULL_PREFIX + spaceUuid
-	spaceDetail, err := retrieveJobMetadata(redisKey)
+	spaceDetail, err := RetrieveJobMetadata(redisKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
 		return
@@ -336,11 +335,134 @@ func GetSpaceLog(c *gin.Context) {
 	handleConnection(conn, spaceDetail, logType)
 }
 
+func DoProof(c *gin.Context) {
+	var proofTask struct {
+		Method    string `json:"method"`
+		BlockData string `json:"block_data"`
+		Exp       int64  `json:"exp"`
+	}
+	if err := c.ShouldBindJSON(&proofTask); err != nil {
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.JsonError))
+		return
+	}
+	logs.GetLogger().Infof("do proof task received: %+v", proofTask)
+
+	if strings.TrimSpace(proofTask.Method) == "" {
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "missing required field: method"))
+		return
+	}
+	if proofTask.Method != "mine" {
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "method must be mine"))
+		return
+	}
+	if proofTask.Exp < 0 || proofTask.Exp > 180 {
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "exp range is [0~180]"))
+		return
+	}
+
+	k8sService := NewK8sService()
+	job := &batchv1.Job{
+		ObjectMeta: metaV1.ObjectMeta{
+			Name: "proof-job-" + generateString(5),
+		},
+		Spec: batchv1.JobSpec{
+			Template: v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:  "worker-container-" + generateString(5),
+							Image: "filswan/worker-proof:v1.0",
+							Env: []v1.EnvVar{
+								{
+									Name:  "METHOD",
+									Value: proofTask.Method,
+								},
+								{
+									Name:  "BLOCK_DATA",
+									Value: proofTask.BlockData,
+								},
+								{
+									Name:  "EXP",
+									Value: strconv.Itoa(int(proofTask.Exp)),
+								},
+							},
+						},
+					},
+					RestartPolicy: "Never",
+				},
+			},
+			BackoffLimit:            new(int32),
+			TTLSecondsAfterFinished: new(int32),
+		},
+	}
+
+	*job.Spec.BackoffLimit = 1
+	*job.Spec.TTLSecondsAfterFinished = 30
+
+	createdJob, err := k8sService.k8sClient.BatchV1().Jobs(metaV1.NamespaceDefault).Create(context.TODO(), job, metaV1.CreateOptions{})
+	if err != nil {
+		logs.GetLogger().Errorf("Failed creating Pod: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
+		return
+	}
+
+	err = wait.PollImmediate(time.Second*3, time.Minute*5, func() (bool, error) {
+		job, err := k8sService.k8sClient.BatchV1().Jobs(metaV1.NamespaceDefault).Get(context.Background(), createdJob.Name, metaV1.GetOptions{})
+		if err != nil {
+			logs.GetLogger().Errorf("Failed getting Job status: %v\n", err)
+			return false, err
+		}
+
+		if job.Status.Succeeded > 0 {
+			return true, nil
+		}
+
+		return false, nil
+	})
+	if err != nil {
+		logs.GetLogger().Errorf("Failed waiting for Job completion: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
+		return
+	}
+
+	podList, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).List(context.Background(), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("job-name=%s", createdJob.Name),
+	})
+	if err != nil {
+		logs.GetLogger().Errorf("Error getting Pods for Job: %v\n", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
+		return
+	}
+
+	if len(podList.Items) == 0 {
+		logs.GetLogger().Errorf("No Pods found for Job.")
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
+		return
+	}
+
+	podName := podList.Items[0].Name
+	podLog, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).GetLogs(podName, &v1.PodLogOptions{}).Stream(context.Background())
+	if err != nil {
+		logs.GetLogger().Errorf("Failed gettingPod logs: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofReadLogError))
+		return
+	}
+	defer podLog.Close()
+
+	bytes, err := io.ReadAll(podLog)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed gettingPod logs: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofReadLogError))
+		return
+	}
+	c.JSON(http.StatusOK, util.CreateSuccessResponse(string(bytes)))
+}
+
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {
 	client := NewWsClient(conn)
 
 	if logType == "build" {
-		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, docker.BuildFileName)
+		buildLogPath := filepath.Join("build", spaceDetail.WalletAddress, "spaces", spaceDetail.SpaceName, BuildFileName)
 		if _, err := os.Stat(buildLogPath); err != nil {
 			logs.GetLogger().Errorf("not found build log file: %s", buildLogPath)
 			return
@@ -385,7 +507,16 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 
 func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
 	updateJobStatus(jobUuid, models.JobUploadResult)
+
+	var success bool
+	var spaceUuid string
+	var walletAddress string
 	defer func() {
+		if !success {
+			k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress)
+			deleteJob(k8sNameSpace, spaceUuid)
+		}
+
 		if err := recover(); err != nil {
 			logs.GetLogger().Errorf("deploy space task painc, error: %+v", err)
 			return
@@ -426,9 +557,9 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		return ""
 	}
 
-	walletAddress := spaceJson.Data.Owner.PublicAddress
+	walletAddress = spaceJson.Data.Owner.PublicAddress
 	spaceName := spaceJson.Data.Space.Name
-	spaceUuid := strings.ToLower(spaceJson.Data.Space.Uuid)
+	spaceUuid = strings.ToLower(spaceJson.Data.Space.Uuid)
 	spaceHardware := spaceJson.Data.Space.ActiveOrder.Config
 
 	conn := redisPool.Get()
@@ -466,10 +597,20 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 	spacePath := filepath.Join("build", walletAddress, "spaces", spaceName)
 	os.RemoveAll(spacePath)
 	updateJobStatus(jobUuid, models.JobDownloadSource)
-	containsYaml, yamlPath, imagePath, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
+	containsYaml, yamlPath, imagePath, modelsSettingFile, err := BuildSpaceTaskImage(spaceUuid, spaceJson.Data.Files)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return ""
+	}
+
+	deploy.WithSpacePath(imagePath)
+	if len(modelsSettingFile) > 0 {
+		err := deploy.WithModelSettingFile(modelsSettingFile).ModelInferenceToK8s()
+		if err != nil {
+			logs.GetLogger().Error(err)
+			return ""
+		}
+		return hostName
 	}
 
 	if containsYaml {
@@ -478,10 +619,12 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		imageName, dockerfilePath := BuildImagesByDockerfile(jobUuid, spaceUuid, spaceName, imagePath)
 		deploy.WithDockerfile(imageName, dockerfilePath).DockerfileToK8s()
 	}
+	success = true
+
 	return hostName
 }
 
-func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) error {
+func deleteJob(namespace, spaceUuid string) error {
 	deployName := constants.K8S_DEPLOY_NAME_PREFIX + spaceUuid
 	serviceName := constants.K8S_SERVICE_NAME_PREFIX + spaceUuid
 	ingressName := constants.K8S_INGRESS_NAME_PREFIX + spaceUuid
@@ -499,7 +642,7 @@ func deleteJob(walletAddress, namespace, spaceUuid, spaceName string) error {
 	}
 	logs.GetLogger().Infof("Deleted service %s finished", serviceName)
 
-	dockerService := docker.NewDockerService()
+	dockerService := NewDockerService()
 	deployImageIds, err := k8sService.GetDeploymentImages(context.TODO(), namespace, deployName)
 	if err != nil && !errors.IsNotFound(err) {
 		logs.GetLogger().Errorf("Failed get deploy imageIds, deployName: %s, error: %+v", deployName, err)
@@ -649,7 +792,7 @@ func getLocalIPAddress() (string, error) {
 
 var NotFoundRedisKey = stErr.New("not found redis key")
 
-func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
+func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	redisConn := redisPool.Get()
 	defer redisConn.Close()
 
@@ -661,7 +804,8 @@ func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		return models.CacheSpaceDetail{}, NotFoundRedisKey
 	}
 
-	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid")
+	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid", "job_uuid",
+		"task_type", "deploy_name", "hardware", "url")
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
@@ -671,16 +815,25 @@ func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	var (
 		walletAddress string
 		spaceName     string
-		spaceUuid     string
 		expireTime    int64
+		spaceUuid     string
+		jobUuid       string
+		taskType      string
+		deployName    string
+		hardware      string
+		url           string
 	)
 
 	if len(valuesStr) >= 3 {
 		walletAddress = valuesStr[0]
 		spaceName = valuesStr[1]
-
 		expireTimeStr := valuesStr[2]
 		spaceUuid = valuesStr[3]
+		jobUuid = valuesStr[4]
+		taskType = valuesStr[5]
+		deployName = valuesStr[6]
+		hardware = valuesStr[7]
+		url = valuesStr[8]
 		expireTime, err = strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
@@ -693,5 +846,10 @@ func retrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		SpaceName:     spaceName,
 		SpaceUuid:     spaceUuid,
 		ExpireTime:    expireTime,
+		JobUuid:       jobUuid,
+		TaskType:      taskType,
+		DeployName:    deployName,
+		Hardware:      hardware,
+		Url:           url,
 	}, nil
 }

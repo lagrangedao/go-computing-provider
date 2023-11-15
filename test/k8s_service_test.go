@@ -4,9 +4,8 @@ import (
 	"archive/tar"
 	"context"
 	"fmt"
-	"github.com/lagrangedao/go-computing-provider/computing"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/yaml"
+	computing2 "github.com/lagrangedao/go-computing-provider/internal/computing"
+	"github.com/lagrangedao/go-computing-provider/internal/yaml"
 	"io"
 	"log"
 	"os"
@@ -15,7 +14,7 @@ import (
 )
 
 func TestNewK8sService(t *testing.T) {
-	service := computing.NewK8sService()
+	service := computing2.NewK8sService()
 	service.GetPods("kube-system", "")
 }
 
@@ -71,12 +70,12 @@ func TestTar(t *testing.T) {
 }
 
 func TestDockerBuild(t *testing.T) {
-	dockerService := docker.NewDockerService()
+	dockerService := computing2.NewDockerService()
 	dockerService.CleanResource()
 }
 
 func TestNewStorageService(t *testing.T) {
-	service := computing.NewStorageService()
+	service := computing2.NewStorageService()
 	service.McsApiKey = "wxE8QdLUANzq6zAwosEUOw"
 	service.McsAccessToken = "4efvcH9opkLp0pS3QDACbI0hpCO5lTcp"
 	service.NetWork = "polygon.mainnet"
@@ -107,7 +106,7 @@ func TestYamlToK8s(t *testing.T) {
 }
 
 func TestStatisticalSources(t *testing.T) {
-	service := computing.NewK8sService()
+	service := computing2.NewK8sService()
 	_, err := service.StatisticalSources(context.TODO())
 	if err != nil {
 		log.Fatalln(err)

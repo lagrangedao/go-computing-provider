@@ -22,5 +22,4 @@
 
 .swan_node
 .env
-build
 config.toml

@@ -107,4 +107,9 @@ type CacheSpaceDetail struct {
 	SpaceName     string
 	SpaceUuid     string
 	ExpireTime    int64
+	JobUuid       string
+	TaskType      string
+	DeployName    string
+	Hardware      string
+	Url           string
 }

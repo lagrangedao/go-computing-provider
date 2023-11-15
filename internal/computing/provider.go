@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
 	"github.com/lagrangedao/go-computing-provider/conf"
-	"github.com/lagrangedao/go-computing-provider/models"
 )
 
 func Reconnect(nodeID string) string {
@@ -74,8 +74,8 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 	}
 }
 
-func InitComputingProvider() string {
-	nodeID, peerID, address := generateNodeID()
+func InitComputingProvider(cpRepoPath string) string {
+	nodeID, peerID, address := GenerateNodeID(cpRepoPath)
 
 	logs.GetLogger().Infof("Node ID :%s Peer ID:%s address:%s",
 		nodeID,
@@ -83,8 +83,8 @@ func InitComputingProvider() string {
 	updateProviderInfo(nodeID, peerID, address, models.ActiveStatus)
 	return nodeID
 }
-func generateNodeID() (string, string, string) {
-	privateKeyPath := ".swan_node/private_key"
+func GenerateNodeID(cpRepoPath string) (string, string, string) {
+	privateKeyPath := filepath.Join(cpRepoPath, "private_key")
 	var privateKeyBytes []byte
 
 	if _, err := os.Stat(privateKeyPath); err == nil {
@@ -92,9 +92,7 @@ func generateNodeID() (string, string, string) {
 		if err != nil {
 			log.Fatalf("Error reading private key: %v", err)
 		}
-		log.Printf("Found key in %s", privateKeyPath)
 	} else {
-		log.Printf("Created key in %s", privateKeyPath)
 		privateKeyBytes = make([]byte, 32)
 		_, err := rand.Read(privateKeyBytes)
 		if err != nil {

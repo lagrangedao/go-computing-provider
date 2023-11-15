@@ -16,7 +16,7 @@ import (
 	"github.com/lagrangedao/go-computing-provider/internal/models"
 	"github.com/lagrangedao/go-computing-provider/util"
 	"io"
-	coreV1 "k8s.io/api/core/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -337,90 +337,141 @@ func GetSpaceLog(c *gin.Context) {
 
 func DoProof(c *gin.Context) {
 	var proofTask struct {
-		Method    string
-		BlockData string
-		Exp       int64
+		Method    string `json:"method"`
+		BlockData string `json:"block_data"`
+		Exp       int64  `json:"exp"`
 	}
 	if err := c.ShouldBindJSON(&proofTask); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.JsonError))
 		return
 	}
 	logs.GetLogger().Infof("do proof task received: %+v", proofTask)
 
 	if strings.TrimSpace(proofTask.Method) == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required field: method"})
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "missing required field: method"))
 		return
 	}
 	if proofTask.Method != "mine" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "method must be mine"})
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "method must be mine"))
 		return
 	}
 	if proofTask.Exp < 200 || proofTask.Exp > 300 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "exp range is [200~300]"})
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "exp range is [200~300]"))
 		return
 	}
 
 	k8sService := NewK8sService()
-	taskPod := &coreV1.Pod{
-		TypeMeta: metaV1.TypeMeta{
-			Kind:       "Pod",
-			APIVersion: "apps/v1",
-		},
+	job := &batchv1.Job{
 		ObjectMeta: metaV1.ObjectMeta{
-			Name: "proof-pod-" + generateString(5),
+			Name: "proof-job-" + generateString(5),
 		},
-		Spec: coreV1.PodSpec{
-			Containers: []coreV1.Container{{
-				Name:            "proof-container" + generateString(5),
-				Image:           "filswan/woker-proof:v1.0",
-				ImagePullPolicy: coreV1.PullIfNotPresent,
-				Env: []coreV1.EnvVar{
-					{
-						Name:  "METHOD",
-						Value: proofTask.Method,
+		Spec: batchv1.JobSpec{
+			Template: v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name:  "worker-container-" + generateString(5),
+							Image: "filswan/worker-proof:v1.0",
+							Env: []v1.EnvVar{
+								{
+									Name:  "METHOD",
+									Value: proofTask.Method,
+								},
+								{
+									Name:  "BLOCK_DATA",
+									Value: proofTask.BlockData,
+								},
+								{
+									Name:  "EXP",
+									Value: strconv.Itoa(int(proofTask.Exp)),
+								},
+							},
+						},
 					},
-					{
-						Name:  "BLOCK_DATA",
-						Value: proofTask.BlockData,
-					},
-					{
-						Name:  "EXP",
-						Value: strconv.Itoa(int(proofTask.Exp)),
-					},
+					RestartPolicy: "Never",
 				},
-			}},
-		}}
+			},
+			BackoffLimit:            new(int32),
+			TTLSecondsAfterFinished: new(int32),
+		},
+	}
 
-	createPod, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).Create(context.TODO(), taskPod, metaV1.CreateOptions{})
+	*job.Spec.BackoffLimit = 1
+	*job.Spec.TTLSecondsAfterFinished = 30
+
+	createdJob, err := k8sService.k8sClient.BatchV1().Jobs(metaV1.NamespaceDefault).Create(context.TODO(), job, metaV1.CreateOptions{})
 	if err != nil {
 		logs.GetLogger().Errorf("Failed creating Pod: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
 		return
 	}
 
-	err = wait.PollImmediate(time.Second*5, time.Minute*10, func() (bool, error) {
-		pod, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).Get(context.TODO(), createPod.Name, metaV1.GetOptions{})
+	err = wait.PollImmediate(time.Second*3, time.Minute*5, func() (bool, error) {
+		job, err := k8sService.k8sClient.BatchV1().Jobs(metaV1.NamespaceDefault).Get(context.Background(), createdJob.Name, metaV1.GetOptions{})
 		if err != nil {
+			logs.GetLogger().Errorf("Failed getting Job status: %v\n", err)
 			return false, err
 		}
-		return pod.Status.Phase == v1.PodRunning, nil
-	})
 
+		if job.Status.Succeeded > 0 {
+			return true, nil
+		}
+
+		return false, nil
+	})
 	if err != nil {
-		logs.GetLogger().Errorf("Failed waiting for Pod to run: %v", err)
+		logs.GetLogger().Errorf("Failed waiting for Job completion: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
 		return
 	}
 
-	podLogOptions := v1.PodLogOptions{}
-	podLogs, err := k8sService.k8sClient.CoreV1().Pods(createPod.Namespace).GetLogs(createPod.Name, &podLogOptions).Stream(context.TODO())
+	podList, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).List(context.Background(), metaV1.ListOptions{
+		LabelSelector: fmt.Sprintf("job-name=%s", createdJob.Name),
+	})
+	if err != nil {
+		logs.GetLogger().Errorf("Error getting Pods for Job: %v\n", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
+		return
+	}
+
+	if len(podList.Items) == 0 {
+		logs.GetLogger().Errorf("No Pods found for Job.")
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofError))
+		return
+	}
+
+	podName := podList.Items[0].Name
+	podLog, err := k8sService.k8sClient.CoreV1().Pods(metaV1.NamespaceDefault).GetLogs(podName, &v1.PodLogOptions{}).Stream(context.Background())
 	if err != nil {
 		logs.GetLogger().Errorf("Failed gettingPod logs: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofReadLogError))
 		return
 	}
-	defer podLogs.Close()
+	defer podLog.Close()
 
-	buf := new(strings.Builder)
-	io.Copy(buf, podLogs)
-	c.JSON(http.StatusOK, util.CreateSuccessResponse(buf.String()))
+	bytes, err := io.ReadAll(podLog)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed gettingPod logs: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofReadLogError))
+		return
+	}
+
+	var result struct {
+		Data   string `json:"data"`
+		Nonce  string `json:"nonce"`
+		Hash   string `json:"hash"`
+		Target string `json:"target"`
+	}
+
+	err = json.Unmarshal(bytes, &result)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed converting to json: %v", err)
+		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.JsonError))
+		return
+	}
+	result.Data = proofTask.BlockData
+
+	c.JSON(http.StatusOK, util.CreateSuccessResponse(result))
 }
 
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {

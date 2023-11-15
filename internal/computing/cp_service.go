@@ -455,23 +455,7 @@ func DoProof(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.ProofReadLogError))
 		return
 	}
-
-	var result struct {
-		Data   string `json:"data"`
-		Nonce  string `json:"nonce"`
-		Hash   string `json:"hash"`
-		Target string `json:"target"`
-	}
-
-	err = json.Unmarshal(bytes, &result)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed converting to json: %v", err)
-		c.JSON(http.StatusInternalServerError, util.CreateErrorResponse(util.JsonError))
-		return
-	}
-	result.Data = proofTask.BlockData
-
-	c.JSON(http.StatusOK, util.CreateSuccessResponse(result))
+	c.JSON(http.StatusOK, util.CreateSuccessResponse(string(bytes)))
 }
 
 func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail, logType string) {

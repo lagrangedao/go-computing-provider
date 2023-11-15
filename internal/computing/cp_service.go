@@ -356,7 +356,7 @@ func DoProof(c *gin.Context) {
 		return
 	}
 	if proofTask.Exp < 200 || proofTask.Exp > 300 {
-		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "exp range is [200~300]"))
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "exp range is [0~180]"))
 		return
 	}
 

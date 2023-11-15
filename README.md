@@ -353,14 +353,6 @@ export CP_PATH=xxx
 nohup computing-provider run >> cp.log 2>&1 & 
 ```
 
-## Getting Help
-
-For usage questions or issues reach out to the Filswan team either in the [Discord channel](https://discord.gg/3uQUWzaS7U) or open a new issue here on GitHub.
-
-## License
-
-Apache
-
 ## CLI of Computing Provider
 * Check the current list of tasks running on CP, display detailed information for tasks using `-v` :
 ```
@@ -374,3 +366,11 @@ computing-provider task get [space_uuid]
 ```
 computing-provider task delete [space_uuid]
 ```
+
+## Getting Help
+
+For usage questions or issues reach out to the Filswan team either in the [Discord channel](https://discord.gg/3uQUWzaS7U) or open a new issue here on GitHub.
+
+## License
+
+Apache

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
-	models2 "github.com/lagrangedao/go-computing-provider/internal/models"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
 	corev1 "k8s.io/api/core/v1"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -31,7 +31,7 @@ func allActivePods(clientSet *kubernetes.Clientset) ([]corev1.Pod, error) {
 	return allPods.Items, nil
 }
 
-func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (map[string]int64, map[string]int64, *models2.NodeResource) {
+func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (map[string]int64, map[string]int64, *models.NodeResource) {
 	var (
 		usedCpu     int64
 		usedMem     int64
@@ -40,7 +40,7 @@ func getNodeResource(allPods []corev1.Pod, node *corev1.Node) (map[string]int64,
 	nodeGpu := make(map[string]int64)
 	remainderResource := make(map[string]int64)
 
-	var nodeResource = new(models2.NodeResource)
+	var nodeResource = new(models.NodeResource)
 	nodeResource.MachineId = node.Status.NodeInfo.MachineID
 	nodeResource.Model = node.Status.NodeInfo.Architecture
 
@@ -148,7 +148,7 @@ func gpuInPod(pod *corev1.Pod) (gpuName string, gpuCount int64) {
 
 func checkClusterProviderStatus() (string, error) {
 
-	var policy models2.ResourcePolicy
+	var policy models.ResourcePolicy
 	currentDir, _ := os.Getwd()
 	resourcePolicy := filepath.Join(currentDir, "resource_policy.json")
 	bytes, err := os.ReadFile(resourcePolicy)
@@ -179,7 +179,7 @@ func checkClusterProviderStatus() (string, error) {
 	}
 	for _, gpu := range nodeGpuInfoMap {
 		var gpuInfo struct {
-			Gpu models2.Gpu `json:"gpu"`
+			Gpu models.Gpu `json:"gpu"`
 		}
 		err := json.Unmarshal([]byte(gpu.String()), &gpuInfo)
 		if err != nil {
@@ -227,34 +227,34 @@ func checkClusterProviderStatus() (string, error) {
 
 	if gpuFlag {
 		if nodeResource[ResourceCpu] < policy.Cpu.Quota || nodeResource[ResourceMem] < policy.Memory.Quota || nodeResource[ResourceStorage] < policy.Memory.Quota {
-			logs.GetLogger().Infof("have gpu, status: %s", models2.InactiveStatus)
-			return models2.InactiveStatus, nil
+			logs.GetLogger().Infof("have gpu, status: %s", models.InactiveStatus)
+			return models.InactiveStatus, nil
 		}
-		return models2.ActiveStatus, nil
+		return models.ActiveStatus, nil
 	} else {
 		if nodeResource[ResourceCpu] < policy.Cpu.Quota || nodeResource[ResourceMem] < policy.Memory.Quota || nodeResource[ResourceStorage] < policy.Memory.Quota {
-			logs.GetLogger().Infof("no gpu, status: %s", models2.InactiveStatus)
-			return models2.InactiveStatus, nil
+			logs.GetLogger().Infof("no gpu, status: %s", models.InactiveStatus)
+			return models.InactiveStatus, nil
 		} else {
-			return models2.ActiveStatus, nil
+			return models.ActiveStatus, nil
 		}
 	}
 }
 
-func defaultResourcePolicy() models2.ResourcePolicy {
-	return models2.ResourcePolicy{
-		Cpu: models2.CpuQuota{
+func defaultResourcePolicy() models.ResourcePolicy {
+	return models.ResourcePolicy{
+		Cpu: models.CpuQuota{
 			Quota: 0,
 		},
-		Memory: models2.Quota{
-			Quota: 0,
-			Unit:  "GiB",
-		},
-		Storage: models2.Quota{
+		Memory: models.Quota{
 			Quota: 0,
 			Unit:  "GiB",
 		},
-		Gpu: []models2.GpuQuota{
+		Storage: models.Quota{
+			Quota: 0,
+			Unit:  "GiB",
+		},
+		Gpu: []models.GpuQuota{
 			{
 				Name:  "Nvidia-2060",
 				Quota: 0,

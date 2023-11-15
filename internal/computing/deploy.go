@@ -8,7 +8,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/constants"
 	"github.com/lagrangedao/go-computing-provider/internal/models"
-	yaml2 "github.com/lagrangedao/go-computing-provider/internal/yaml"
+	"github.com/lagrangedao/go-computing-provider/internal/yaml"
 	"github.com/lagrangedao/go-computing-provider/util"
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
@@ -158,7 +158,7 @@ func (d *Deploy) DockerfileToK8s() {
 }
 
 func (d *Deploy) YamlToK8s() {
-	containerResources, err := yaml2.HandlerYaml(d.yamlPath)
+	containerResources, err := yaml.HandlerYaml(d.yamlPath)
 	if err != nil {
 		logs.GetLogger().Error(err)
 		return
@@ -310,7 +310,7 @@ func (d *Deploy) YamlToK8s() {
 
 		if len(cr.Models) > 0 {
 			for _, res := range cr.Models {
-				go func(res yaml2.ModelResource) {
+				go func(res yaml.ModelResource) {
 					downloadModelUrl(d.k8sNameSpace, d.spaceUuid, serviceHost, []string{"wget", res.Url, "-O", filepath.Join(res.Dir, res.Name)})
 				}(res)
 			}

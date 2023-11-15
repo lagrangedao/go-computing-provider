@@ -302,9 +302,9 @@ git checkout v0.2.0
 Then build the Computing provider follow the below steps:
 
 ```bash
-go mod tidy
-
-go build -o computing-provider main.go
+export CP_PATH=xxx
+make clean && make
+make install
 ```
  - Update Configuration 
 The computing provider's configuration sample locate in `./go-computing-provider/config.toml.sample`
@@ -349,7 +349,8 @@ Password = ""                                 # The login password, if only a si
 ## Start the Computing Provider
 You can run computing-provider using the following command:
 ```bash
-nohup ./computing-provider run >> cp.log 2>&1 & 
+export CP_PATH=xxx
+nohup computing-provider run >> cp.log 2>&1 & 
 ```
 
 ## Getting Help

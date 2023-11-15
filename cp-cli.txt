@@ -1,9 +1,0 @@
-
-1. task list
-computing-provider task list -v
-
-2. task detail  args: [space_uuid]
-computing-provider task get 9da873de-49a0-406f-8da6-2c515021f51d
-
-3. delete task  args: [space_uuid]
-computing-provider task delete 9da873de-49a0-406f-8da6-2c515021f51d

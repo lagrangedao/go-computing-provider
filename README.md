@@ -16,8 +16,8 @@ A computing provider is an individual or organization that participates in the d
  - [Install the Hardware resource-exporter](#Install-the-Hardware-resource-exporter)
  - [Install the Redis service](#Install-the-Redis-service)
  - [Build and config the Computing Provider](#Build-and-config-the-Computing-Provider)
- - [Start the Computing Provider](#Start-the-Computing-Provider) 
-
+ - [Start the Computing Provider](#Start-the-Computing-Provider)
+ - [CLI of Computing Provider](#CLI-of-Computing-Provider)
 
 ## Prerequisites
 Before you install the Computing Provider, you need to know there are some resources required:
@@ -302,9 +302,9 @@ git checkout v0.2.0
 Then build the Computing provider follow the below steps:
 
 ```bash
-go mod tidy
-
-go build -o computing-provider main.go
+export CP_PATH=xxx
+make clean && make
+make install
 ```
  - Update Configuration 
 The computing provider's configuration sample locate in `./go-computing-provider/config.toml.sample`
@@ -349,7 +349,22 @@ Password = ""                                 # The login password, if only a si
 ## Start the Computing Provider
 You can run computing-provider using the following command:
 ```bash
-nohup ./computing-provider run >> cp.log 2>&1 & 
+export CP_PATH=xxx
+nohup computing-provider run >> cp.log 2>&1 & 
+```
+
+## CLI of Computing Provider
+* Check the current list of tasks running on CP, display detailed information for tasks using `-v` :
+```
+computing-provider task list 
+```
+* Retrieve detailed information for a specific task using `space_uuid` :
+```
+computing-provider task get [space_uuid]
+```
+* Delete mismatched or failed tasks by `space_uuid`:
+```
+computing-provider task delete [space_uuid]
 ```
 
 ## Getting Help

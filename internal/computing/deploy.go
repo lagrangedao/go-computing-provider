@@ -2,47 +2,57 @@ package computing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/filswan/go-mcs-sdk/mcs/api/common/logs"
+	"github.com/gomodule/redigo/redis"
 	"github.com/lagrangedao/go-computing-provider/constants"
-	"github.com/lagrangedao/go-computing-provider/docker"
-	"github.com/lagrangedao/go-computing-provider/models"
-	"github.com/lagrangedao/go-computing-provider/yaml"
+	"github.com/lagrangedao/go-computing-provider/internal/models"
+	"github.com/lagrangedao/go-computing-provider/internal/yaml"
+	"github.com/lagrangedao/go-computing-provider/util"
 	appV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type Deploy struct {
-	jobUuid          string
-	hostName         string
-	walletAddress    string
-	spaceUuid        string
-	spaceName        string
-	image            string
-	dockerfilePath   string
-	yamlPath         string
-	duration         int64
-	hardwareResource models.Resource
-
-	k8sNameSpace string
+	jobUuid           string
+	hostName          string
+	walletAddress     string
+	spaceUuid         string
+	spaceName         string
+	image             string
+	dockerfilePath    string
+	yamlPath          string
+	duration          int64
+	hardwareResource  models.Resource
+	modelsSettingFile string
+	k8sNameSpace      string
+	SpacePath         string
+	TaskType          string
+	DeployName        string
+	hardwareDesc      string
 }
 
 func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration int64) *Deploy {
+	taskType, hardwareDetail := getHardwareDetail(hardwareDesc)
 	return &Deploy{
 		jobUuid:          jobUuid,
 		hostName:         hostName,
 		walletAddress:    walletAddress,
 		duration:         duration,
-		hardwareResource: getHardwareDetail(hardwareDesc),
-
-		k8sNameSpace: constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress),
+		hardwareResource: hardwareDetail,
+		TaskType:         taskType,
+		k8sNameSpace:     constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress),
+		hardwareDesc:     hardwareDesc,
 	}
 }
 
@@ -63,8 +73,18 @@ func (d *Deploy) WithDockerfile(image, dockerfilePath string) *Deploy {
 	return d
 }
 
+func (d *Deploy) WithSpacePath(spacePath string) *Deploy {
+	d.SpacePath = spacePath
+	return d
+}
+
+func (d *Deploy) WithModelSettingFile(modelsSettingFile string) *Deploy {
+	d.modelsSettingFile = modelsSettingFile
+	return d
+}
+
 func (d *Deploy) DockerfileToK8s() {
-	exposedPort, err := docker.ExtractExposedPort(d.dockerfilePath)
+	exposedPort, err := ExtractExposedPort(d.dockerfilePath)
 	if err != nil {
 		logs.GetLogger().Infof("Failed to extract exposed port: %v", err)
 		return
@@ -75,7 +95,7 @@ func (d *Deploy) DockerfileToK8s() {
 		return
 	}
 
-	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
+	deleteJob(d.k8sNameSpace, d.spaceUuid)
 
 	if err := d.deployNamespace(); err != nil {
 		logs.GetLogger().Error(err)
@@ -123,9 +143,9 @@ func (d *Deploy) DockerfileToK8s() {
 		logs.GetLogger().Error(err)
 		return
 	}
-
+	d.DeployName = createDeployment.GetName()
 	updateJobStatus(d.jobUuid, models.JobPullImage)
-	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetName())
 
 	if _, err := d.deployK8sResource(int32(containerPort)); err != nil {
 		logs.GetLogger().Error(err)
@@ -144,7 +164,7 @@ func (d *Deploy) YamlToK8s() {
 		return
 	}
 
-	deleteJob(d.walletAddress, d.k8sNameSpace, d.spaceUuid, d.spaceName)
+	deleteJob(d.k8sNameSpace, d.spaceUuid)
 
 	if err := d.deployNamespace(); err != nil {
 		logs.GetLogger().Error(err)
@@ -276,7 +296,7 @@ func (d *Deploy) YamlToK8s() {
 			logs.GetLogger().Error(err)
 			return
 		}
-
+		d.DeployName = createDeployment.GetName()
 		updateJobStatus(d.jobUuid, models.JobPullImage)
 		logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
 
@@ -285,6 +305,7 @@ func (d *Deploy) YamlToK8s() {
 			logs.GetLogger().Error(err)
 			return
 		}
+
 		updateJobStatus(d.jobUuid, models.JobDeployToK8s, "https://"+d.hostName)
 
 		if len(cr.Models) > 0 {
@@ -296,6 +317,122 @@ func (d *Deploy) YamlToK8s() {
 		}
 		d.watchContainerRunningTime()
 	}
+}
+
+func (d *Deploy) ModelInferenceToK8s() error {
+	var modelSetting struct {
+		ModelId string `json:"model_id"`
+	}
+	modelData, _ := os.ReadFile(d.modelsSettingFile)
+	err := json.Unmarshal(modelData, &modelSetting)
+	if err != nil {
+		logs.GetLogger().Errorf("convert model_id out to json failed, error: %+v", err)
+		return err
+	}
+
+	cpPath, _ := os.LookupEnv("CP_PATH")
+	basePath := filepath.Join(cpPath, "inference-model")
+
+	modelInfoOut, err := util.RunPythonScript(filepath.Join(basePath, "/scripts/hf_client.py"), "model_info", modelSetting.ModelId)
+	if err != nil {
+		logs.GetLogger().Errorf("exec model_info cmd failed, error: %+v", err)
+		return err
+	}
+
+	var modelInfo struct {
+		ModelId   string `json:"model_id"`
+		Task      string `json:"task"`
+		Framework string `json:"framework"`
+	}
+	err = json.Unmarshal([]byte(modelInfoOut), &modelInfo)
+	if err != nil {
+		logs.GetLogger().Errorf("convert model_info out to json failed, error: %+v", err)
+		return err
+	}
+
+	deleteJob(d.k8sNameSpace, d.spaceUuid)
+	imageName := "lagrange/" + modelInfo.Framework + ":v1.0"
+
+	logFile := filepath.Join(d.SpacePath, BuildFileName)
+	if _, err = os.Create(logFile); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	util.StreamPythonScriptOutput(&wg, filepath.Join(basePath, "build_docker.py"), basePath, modelInfo.Framework, imageName, logFile)
+	wg.Wait()
+
+	modelEnvs := []coreV1.EnvVar{
+		{
+			Name:  "TASK",
+			Value: modelInfo.Task,
+		},
+		{
+			Name:  "MODEL_ID",
+			Value: modelInfo.ModelId,
+		},
+	}
+
+	d.image = imageName
+
+	if err := d.deployNamespace(); err != nil {
+		logs.GetLogger().Error(err)
+		return err
+	}
+
+	k8sService := NewK8sService()
+	deployment := &appV1.Deployment{
+		TypeMeta: metaV1.TypeMeta{
+			Kind:       "Deployment",
+			APIVersion: "apps/v1",
+		},
+		ObjectMeta: metaV1.ObjectMeta{
+			Name:      constants.K8S_DEPLOY_NAME_PREFIX + d.spaceUuid,
+			Namespace: d.k8sNameSpace,
+		},
+		Spec: appV1.DeploymentSpec{
+			Selector: &metaV1.LabelSelector{
+				MatchLabels: map[string]string{"lad_app": d.spaceUuid},
+			},
+
+			Template: coreV1.PodTemplateSpec{
+				ObjectMeta: metaV1.ObjectMeta{
+					Labels:    map[string]string{"lad_app": d.spaceUuid},
+					Namespace: d.k8sNameSpace,
+				},
+
+				Spec: coreV1.PodSpec{
+					NodeSelector: generateLabel(d.hardwareResource.Gpu.Unit),
+					Containers: []coreV1.Container{{
+						Name:            constants.K8S_CONTAINER_NAME_PREFIX + d.spaceUuid,
+						Image:           d.image,
+						ImagePullPolicy: coreV1.PullIfNotPresent,
+						Ports: []coreV1.ContainerPort{{
+							ContainerPort: int32(80),
+						}},
+						Env: d.createEnv(modelEnvs...),
+						//Resources: d.createResources(),
+					}},
+				},
+			},
+		}}
+	createDeployment, err := k8sService.CreateDeployment(context.TODO(), d.k8sNameSpace, deployment)
+	if err != nil {
+		logs.GetLogger().Error(err)
+		return err
+	}
+	d.DeployName = createDeployment.GetName()
+	updateJobStatus(d.jobUuid, models.JobPullImage)
+	logs.GetLogger().Infof("Created deployment: %s", createDeployment.GetObjectMeta().GetName())
+
+	if _, err := d.deployK8sResource(int32(80)); err != nil {
+		logs.GetLogger().Error(err)
+		return err
+	}
+	updateJobStatus(d.jobUuid, models.JobDeployToK8s)
+	d.watchContainerRunningTime()
+	return nil
 }
 
 func (d *Deploy) deployNamespace() error {
@@ -329,8 +466,8 @@ func (d *Deploy) deployNamespace() error {
 	return nil
 }
 
-func (d *Deploy) createEnv() []coreV1.EnvVar {
-	return []coreV1.EnvVar{
+func (d *Deploy) createEnv(envs ...coreV1.EnvVar) []coreV1.EnvVar {
+	defaultEnv := []coreV1.EnvVar{
 		{
 			Name:  "space_uuid",
 			Value: d.spaceUuid,
@@ -348,6 +485,9 @@ func (d *Deploy) createEnv() []coreV1.EnvVar {
 			Value: d.jobUuid,
 		},
 	}
+
+	defaultEnv = append(defaultEnv, envs...)
+	return defaultEnv
 }
 
 func (d *Deploy) createResources() coreV1.ResourceRequirements {
@@ -407,27 +547,39 @@ func (d *Deploy) watchContainerRunningTime() {
 		return
 	}
 
-	fullArgs := []interface{}{constants.REDIS_FULL_PREFIX + d.spaceUuid}
+	key := constants.REDIS_FULL_PREFIX + d.spaceUuid
+	conn.Do("DEL", redis.Args{}.AddFlat(key)...)
+
+	fullArgs := []interface{}{key}
 	fields := map[string]string{
 		"wallet_address": d.walletAddress,
 		"space_name":     d.spaceName,
 		"expire_time":    strconv.Itoa(int(time.Now().Unix() + d.duration)),
 		"space_uuid":     d.spaceUuid,
+		"job_uuid":       d.jobUuid,
+		"task_type":      d.TaskType,
+		"deploy_name":    d.DeployName,
+		"hardware":       d.hardwareDesc,
+		"url":            fmt.Sprintf("https://%s", d.hostName),
 	}
 
 	for key, val := range fields {
 		fullArgs = append(fullArgs, key, val)
 	}
 	_, _ = conn.Do("HSET", fullArgs...)
+
 }
 
-func getHardwareDetail(description string) models.Resource {
+func getHardwareDetail(description string) (string, models.Resource) {
+	var taskType string
 	var hardwareResource models.Resource
 	confSplits := strings.Split(description, "·")
 	if strings.Contains(confSplits[0], "CPU") {
 		hardwareResource.Gpu.Quantity = 0
 		hardwareResource.Gpu.Unit = ""
+		taskType = "CPU"
 	} else {
+		taskType = "GPU"
 		hardwareResource.Gpu.Quantity = 1
 		oldName := strings.TrimSpace(confSplits[0])
 		hardwareResource.Gpu.Unit = strings.ReplaceAll(oldName, "Nvidia", "NVIDIA")
@@ -445,5 +597,5 @@ func getHardwareDetail(description string) models.Resource {
 
 	hardwareResource.Storage.Quantity = 30
 	hardwareResource.Storage.Unit = "Gi"
-	return hardwareResource
+	return taskType, hardwareResource
 }

@@ -355,8 +355,8 @@ func DoProof(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "method must be mine"))
 		return
 	}
-	if proofTask.Exp < 0 || proofTask.Exp > 180 {
-		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "exp range is [0~180]"))
+	if proofTask.Exp < 0 || proofTask.Exp > 250 {
+		c.JSON(http.StatusBadRequest, util.CreateErrorResponse(util.ProofParamError, "exp range is [0~250]"))
 		return
 	}
 

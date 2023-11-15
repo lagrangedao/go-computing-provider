@@ -31,7 +31,10 @@ wget -c https://golang.org/dl/go1.19.7.linux-amd64.tar.gz -O - | sudo tar -xz -C
 
 echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 ```
-
+ - Install python:
+```bash
+./install.sh
+```
 
 ## Install the Kubernetes
 The Kubernetes version should be `v1.24.0+`
@@ -273,6 +276,7 @@ EOF
 ```
 If you have installed it correctly, you can see the result shown in the figure by the command:
 `kubectl get po -n kube-system`
+
 ![7](https://github.com/lagrangedao/go-computing-provider/assets/102578774/38b0e15f-5ff9-4edc-a313-d0f6f4a0bda8)
 
 ### Install Redis service
@@ -347,29 +351,29 @@ Password = ""                                 # The login password, if only a si
 
 
 ## Start the Computing Provider
-You can run computing-provider using the following command:
+You can run `computing-provider` using the following command
 ```bash
 export CP_PATH=xxx
 nohup computing-provider run >> cp.log 2>&1 & 
 ```
 
 ## CLI of Computing Provider
-* Check the current list of tasks running on CP, display detailed information for tasks using `-v` :
+* Check the current list of tasks running on CP, display detailed information for tasks using `-v`
 ```
 computing-provider task list 
 ```
-* Retrieve detailed information for a specific task using `space_uuid` :
+* Retrieve detailed information for a specific task using `space_uuid`
 ```
 computing-provider task get [space_uuid]
 ```
-* Delete mismatched or failed tasks by `space_uuid`:
+* Delete task by `space_uuid`
 ```
 computing-provider task delete [space_uuid]
 ```
 
 ## Getting Help
 
-For usage questions or issues reach out to the Filswan team either in the [Discord channel](https://discord.gg/3uQUWzaS7U) or open a new issue here on GitHub.
+For usage questions or issues reach out to the Swan team either in the [Discord channel](https://discord.gg/3uQUWzaS7U) or open a new issue here on GitHub.
 
 ## License
 

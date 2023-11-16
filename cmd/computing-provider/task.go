@@ -252,7 +252,7 @@ var taskDelete = &cli.Command{
 		computing.GetRedisClient()
 
 		spaceUuid := strings.ToLower(cctx.Args().First())
-		jobDetail, err := computing.RetrieveJobMetadata(spaceUuid)
+		jobDetail, err := computing.RetrieveJobMetadata(constants.REDIS_FULL_PREFIX+spaceUuid)
 		if err != nil {
 			return fmt.Errorf("failed get job detail: %s, error: %+v", spaceUuid, err)
 		}

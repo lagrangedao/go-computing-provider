@@ -1,4 +1,8 @@
 # Computing Provider
+[![Discord](https://img.shields.io/discord/770382203782692945?label=Discord&logo=Discord)](https://discord.gg/MSXGzVsSYf)
+[![Twitter Follow](https://img.shields.io/twitter/follow/swan_chain)](https://twitter.com/swan_chain)
+[![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg)](https://github.com/RichardLitt/standard-readme)
+
 A computing provider is an individual or organization that participates in the decentralized computing network by offering computational resources such as processing power (CPU and GPU), memory, storage, and bandwidth. Their primary role is to execute tasks posted by users on the Lagrange platform.
 
 
@@ -16,6 +20,7 @@ A computing provider is an individual or organization that participates in the d
  - [Install the Hardware resource-exporter](#Install-the-Hardware-resource-exporter)
  - [Install the Redis service](#Install-the-Redis-service)
  - [Build and config the Computing Provider](#Build-and-config-the-Computing-Provider)
+ - [Install AI Inference Dependency(Optional)](#Install-AI-Inference-Dependency)
  - [Start the Computing Provider](#Start-the-Computing-Provider)
  - [CLI of Computing Provider](#CLI-of-Computing-Provider)
 
@@ -30,10 +35,6 @@ Before you install the Computing Provider, you need to know there are some resou
 wget -c https://golang.org/dl/go1.19.7.linux-amd64.tar.gz -O - | sudo tar -xz -C /usr/local
 
 echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
-```
- - Install Python:
-```bash
-./install.sh
 ```
 
 ## Install the Kubernetes
@@ -300,13 +301,12 @@ systemctl start redis-server.service
 ```bash
 git clone https://github.com/lagrangedao/go-computing-provider.git
 cd go-computing-provider
-git checkout v0.2.0
+git checkout v0.3.0
 ```
 
 Then build the Computing provider follow the below steps:
 
 ```bash
-export CP_PATH=xxx
 make clean && make
 make install
 ```
@@ -347,6 +347,12 @@ FileCachePath = "/tmp"                        # Cache directory of job data
 ServerAddress = ""                            # The docker container image registry address, if only a single node, you can ignore
 UserName = ""                                 # The login username, if only a single node, you can ignore
 Password = ""                                 # The login password, if only a single node, you can ignore
+```
+## Install AI Inference Dependency
+It is necessary for Computing Provider to deploy the  AI inference endpoint. But if you do not want to support the feature, you can skip it.
+```bash
+export CP_PATH=xxx
+./install.sh
 ```
 
 

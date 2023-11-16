@@ -45,6 +45,6 @@ if [ ! -d "$CP_PATH/inference-model" ]; then
 fi
 
 # Install dependencies
-#pip3 install -r "$CP_PATH/inference-model/requirements.txt"
+pip3 install -r "$CP_PATH/inference-model/requirements.txt"
 
 echo "Setup completed successfully."

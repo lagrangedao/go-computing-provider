@@ -131,6 +131,8 @@ var taskList = &cli.Command{
 				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgGreenColor})
 			} else if spaceStatus == "Stopped" {
 				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgRedColor})
+			}else {
+				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgYellowColor})
 			}
 
 			rowColorList = append(rowColorList, RowColor{

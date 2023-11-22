@@ -8,8 +8,25 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 
 ## 目录
 
-* 准备工作
-* 安装 Kubernetes
+* 0.[准备工作](./#0.-zhun-bei-gong-zuo)
+* 1.[安装 Kubernetes](./#1.-an-zhuang-kubernetes)
+  * [安装Container Runtime Environment](./#1.1-an-zhuang-container-runtime-environment)
+  * [设置 Docker 仓库（可选）](./#1.2-ke-xuan-she-zhi-docker-cang-ku)
+  * [创建 Kubernetes 集群](./#1.3-chuang-jian-kubernetes-ji-qun)
+  * [安装网络插件](./#1.4-an-zhuang-wang-luo-cha-jian)
+  * [安装 NVIDIA 插件](./#1.5-an-zhuang-nvidia-cha-jian)
+  * [安装 Ingress-nginx 控制器](./#1.6-an-zhuang-ingressnginx-kong-zhi-qi)
+* 2.[安装和配置 Nginx](./#2.-an-zhuang-he-pei-zhi-nginx)
+* 3.[安装Hardware resource-exporter](./#3.-an-zhuang-hardware-resourceexporter)
+* 4.[安装 Redis 服务](./#4.-an-zhuang-redis-service)
+* 5.[部署和配置Computing Provider](./#5.-bu-shu-he-pei-zhi-computing-provider)
+* 6.[安装 AI Inference Dependency（可选）](./#6.-an-zhuang-ai-inference-yi-lai-xiang)
+* 7.[启动Computing Provider](./#7.-qi-dong-computing-provider)
+* 8.[Computing Provider的 CLI](./#8.-computing-provider-de-cli)
+
+
+* [准备工作](#0.准备工作)
+* [安装 Kubernetes](#1.安装Kubernetes)
   * 安装容器运行时环境
   * 可选项 - 设置 Docker 仓库
   * 创建 Kubernetes 集群

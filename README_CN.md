@@ -8,12 +8,12 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 
 * 0.[准备工作](#准备工作) 
 * 1.[安装 Kubernetes](#安装Kubernetes)
-  * [安装Container Runtime Environment](#安装Container-Runtime-Environment)
-  * [设置 Docker 仓库（可选）](#可选-设置Docker仓库)
-  * [创建 Kubernetes 集群](#创建Kubernetes集群)
-  * [安装网络插件](#安装网络插件)
-  * [安装 NVIDIA 插件](#安装NVIDIA插件)
-  * [安装 Ingress-nginx 控制器](#安装Ingress-nginx控制器)
+  * [1.1 安装Container Runtime Environment](#安装Container-Runtime-Environment)
+  * [1.2 设置 Docker 仓库（可选）](#可选-设置Docker仓库)
+  * [1.3 创建 Kubernetes 集群](#创建Kubernetes集群)
+  * [1.4 安装网络插件](#安装网络插件)
+  * [1.5 安装 NVIDIA 插件](#安装NVIDIA插件)
+  * [1.6 安装 Ingress-nginx 控制器](#安装Ingress-nginx控制器)
 * 2.[安装和配置 Nginx](#安装和配置Nginx)
 * 3.[安装Hardware resource-exporter](#安装Hardware-resource-exporter)
 * 4.[安装 Redis service](#安装Redis-service)
@@ -59,7 +59,7 @@ Kubernetes版本应为`v1.24.0+`
 
 `Containerd`是一种符合行业标准的容器运行时(Container Runtime)，可用作Docker的替代方案。要在系统上安装`containerd`，请按照[containerd入门](https://github.com/containerd/containerd/blob/main/docs/getting-started.md)上的说明操作。
 
-### 1.2可选 - 设置Docker仓库
+### 可选 - 设置Docker仓库
 
 **如果您使用Docker且只有一个节点，则可以跳过此步骤**。
 
@@ -134,14 +134,14 @@ docker system info
 
 ![2](https://github.com/lagrangedao/go-computing-provider/assets/102578774/4cfc1981-3fca-415c-948f-86c496915cff)
 
-### 1.3 创建Kubernetes集群
+### 创建Kubernetes集群
 
 要创建Kubernetes集群，您可以使用`kubeadm`等容器管理工具。可以按照以下步骤进行操作：
 
 * [安装kubeadm工具箱](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)。
 * [使用kubeadm创建Kubernetes集群](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/create-cluster-kubeadm/)。
 
-### 1.4 安装网络插件
+### 安装网络插件
 
 Calico是一个开源的**容器网络和网络安全解决方案**，适用于容器、虚拟机和本机主机工作负载。Calico支持多种平台，包括**Kubernetes**、OpenShift、Mirantis Kubernetes Engine（MKE）、OpenStack和裸金属服务。
 
@@ -184,7 +184,7 @@ kubectl taint nodes --all node-role.kubernetes.io/master-
 kubectl taint node ${nodeName}  node-role.kubernetes.io/control-plane:NoSchedule-
 ```
 
-### 1.5 安装NVIDIA插件
+### 安装NVIDIA插件
 
 如果您的Computing Provider希望提供GPU资源，则应安装NVIDIA插件，请按照以下步骤操作：
 
@@ -198,7 +198,7 @@ kubectl taint node ${nodeName}  node-role.kubernetes.io/control-plane:NoSchedule
 
 ![4](https://github.com/lagrangedao/go-computing-provider/assets/102578774/8209c589-d561-43ad-adea-5ecb52618909)
 
-### 1.6 安装Ingress-nginx控制器
+### 安装Ingress-nginx控制器
 
 `ingress-nginx`是用于Kubernetes的Ingress控制器，使用`NGINX`作为反向代理和负载均衡器。您可以运行以下命令进行安装：
 

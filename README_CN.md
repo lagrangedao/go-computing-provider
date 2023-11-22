@@ -6,26 +6,24 @@
 
 Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）、内存、存储和带宽）参与分散式计算网络的个人或组织。它们的主要角色是执行用户在 Lagrange 平台上发布的任务。
 
-## 目录
-
-* [0.准备工作](#0-准备工作)
-* 1.[安装 Kubernetes](./#1.-an-zhuang-kubernetes)
-  * [安装Container Runtime Environment](./#1.1-an-zhuang-container-runtime-environment)
-  * [设置 Docker 仓库（可选）](./#1.2-ke-xuan-she-zhi-docker-cang-ku)
-  * [创建 Kubernetes 集群](./#1.3-chuang-jian-kubernetes-ji-qun)
-  * [安装网络插件](./#1.4-an-zhuang-wang-luo-cha-jian)
-  * [安装 NVIDIA 插件](./#1.5-an-zhuang-nvidia-cha-jian)
-  * [安装 Ingress-nginx 控制器](./#1.6-an-zhuang-ingressnginx-kong-zhi-qi)
-* 2.[安装和配置 Nginx](./#2.-an-zhuang-he-pei-zhi-nginx)
-* 3.[安装Hardware resource-exporter](./#3.-an-zhuang-hardware-resourceexporter)
-* 4.[安装 Redis 服务](./#4.-an-zhuang-redis-service)
-* 5.[部署和配置Computing Provider](./#5.-bu-shu-he-pei-zhi-computing-provider)
-* 6.[安装 AI Inference Dependency（可选）](./#6.-an-zhuang-ai-inference-yi-lai-xiang)
-* 7.[启动Computing Provider](./#7.-qi-dong-computing-provider)
-* 8.[Computing Provider的 CLI](./#8.-computing-provider-de-cli)
+* 0.[准备工作](#准备工作) 
+* 1.[安装 Kubernetes](#安装-Kubernetes)
+  * [安装Container Runtime Environment](#安装Container-Runtime-Environment)
+  * [设置 Docker 仓库（可选）](#设置-Docker-仓库（可选）)
+  * [创建 Kubernetes 集群](#创建-Kubernetes-集群)
+  * [安装网络插件](#安装网络插件)
+  * [安装 NVIDIA 插件](#安装-NVIDIA-插件)
+  * [安装 Ingress-nginx 控制器](#安装-Ingress-nginx-控制器)
+* 2.[安装和配置 Nginx](#安装和配置-Nginx)
+* 3.[安装Hardware resource-exporter](#安装-Hardware-resource-exporter)
+* 4.[安装 Redis 服务](#安装-Redis-服务)
+* 5.[部署和配置Computing Provider](./#5-bu-shu-he-pei-zhi-computing-provider) [部署和配置Computing Provider](#部署和配置-Computing-Provider)
+* 6.[安装 AI Inference Dependency（可选）](./#6-an-zhuang-ai-inference-yi-lai-xiang) [安装 AI Inference Dependency（可选）](#安装-AI-Inference-Dependency（可选）)
+* 7.[启动Computing Provider](./#7-qi-dong-computing-provider) [启动Computing Provider](#启动-Computing-Provider)
+* 8.[Computing Provider的 CLI](./#8-computing-provider-de-cli) [Computing Provider的 CLI](#Computing-Provider的-CLI)
 
 
-## 0.准备工作
+## 准备工作
 
 在部署 Computing Provider 之前，您需要满足以下资源条件：
 
@@ -40,7 +38,7 @@ wget -c https://golang.org/dl/go1.19.7.linux-amd64.tar.gz -O - | sudo tar -xz -C
 echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 ```
 
-## 1.安装Kubernetes
+## 安装Kubernetes
 
 Kubernetes版本应为`v1.24.0+`
 
@@ -218,7 +216,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 
 ![6](https://github.com/lagrangedao/go-computing-provider/assets/102578774/e3b3dadc-77c1-4dc0-843c-5b946e252b65)
 
-## 2. 安装和配置Nginx
+## 安装和配置Nginx
 
 安装`Nginx`服务到服务器
 
@@ -276,7 +274,7 @@ sudo nginx -s reload
 
 将“catch-all（通配符）子域名（\*.example.com）”映射到公共IP地址
 
-## 3.安装Hardware resource-exporter
+## 安装Hardware resource-exporter
 
 `resource-exporter`插件是为了持续收集节点资源，Computing Provider将资源报告给Lagrange Auction Engine以匹配空间需求。要获取计算任务，集群中的每个节点都必须安装该插件。只需运行以下命令：
 
@@ -309,7 +307,7 @@ EOF
 
 ![7](https://github.com/lagrangedao/go-computing-provider/assets/102578774/38b0e15f-5ff9-4edc-a313-d0f6f4a0bda8)
 
-## 4. 安装Redis service
+## 安装Redis service
 
 安装`redis-server`
 
@@ -324,7 +322,7 @@ sudo apt install redis-server
 systemctl start redis-server.service
 ```
 
-## 5. 部署和配置Computing Provider
+## 部署和配置Computing Provider
 
 ### 5.1 部署Computing Provider
 
@@ -385,7 +383,7 @@ UserName = ""                                 # 登录用户名，如果只有�
 Password = ""                                 # 登录密码，如果只有一个节点，可以忽略
 ```
 
-## 6. 安装AI Inference 依赖项
+## 安装AI Inference 依赖项
 
 对于计算提供者来说，部署AI inference 端点是必要的。但如果您不想支持此功能，可以跳过它。
 
@@ -394,7 +392,7 @@ export CP_PATH=xxx
 ./install.sh
 ```
 
-## 7. 启动Computing Provider
+## 启动Computing Provider
 
 您可以使用以下命令运行 `computing-provider`
 
@@ -403,7 +401,7 @@ export CP_PATH=xxx
 nohup computing-provider run >> cp.log 2>&1 & 
 ```
 
-## 8. Computing Provider的CLI
+## Computing Provider的CLI
 
 检查CP上当前运行的任务列表，使用 `-v` 显示任务的详细信息
 

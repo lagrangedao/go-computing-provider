@@ -8,7 +8,7 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 
 ## 目录
 
-* 0.[准备工作](#0-准备工作)
+* [0.准备工作](#0-准备工作)
 * 1.[安装 Kubernetes](./#1.-an-zhuang-kubernetes)
   * [安装Container Runtime Environment](./#1.1-an-zhuang-container-runtime-environment)
   * [设置 Docker 仓库（可选）](./#1.2-ke-xuan-she-zhi-docker-cang-ku)

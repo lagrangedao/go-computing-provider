@@ -42,7 +42,7 @@ echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 
 Kubernetes版本应为`v1.24.0+`
 
-### 1.1 安装Container Runtime Environment
+### 安装Container Runtime Environment
 
 如果您计划运行Kubernetes集群，您需要在集群中的每个节点上安装`Container Runtime Environment`，以便Pod可以运行，详情请参考[这里](https://kubernetes.io/docs/setup/production-environment/container-runtimes/)。您只需选择一种选项来安装`Container Runtime Environment`。
 

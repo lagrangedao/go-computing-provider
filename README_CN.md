@@ -20,7 +20,7 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 * 5.[部署和配置Computing Provider](#部署和配置Computing-Provider)
 * 6.[安装 AI Inference 依赖项（可选）](#安装AI-Inference依赖项)
 * 7.[启动Computing Provider](#启动Computing-Provider)
-* 8.[Computing Provider的 CLI](#Computing-Provider的-CLI)
+* 8.[Computing Provider的 CLI](#Computing-Provider的CLI)
 
 
 ## 准备工作

@@ -25,22 +25,6 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 * 8.[Computing Provider的 CLI](./#8.-computing-provider-de-cli)
 
 
-* [准备工作](#0.准备工作)
-* [安装 Kubernetes](#1.安装Kubernetes)
-  * 安装容器运行时环境
-  * 可选项 - 设置 Docker 仓库
-  * 创建 Kubernetes 集群
-  * 安装网络插件
-  * 安装 NVIDIA 插件
-  * 安装 Ingress-nginx 控制器
-* 安装和配置 Nginx
-* 安装Hardware resource-exporter
-* 安装 Redis 服务
-* 部署和配置Computing Provider
-* 安装 AI Inference Dependency（可选）
-* 启动Computing Provider
-* Computing Provider的 CLI
-
 ## 0.准备工作
 
 在部署 Computing Provider 之前，您需要满足以下资源条件：

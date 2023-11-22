@@ -9,7 +9,7 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 * 0.[准备工作](#准备工作) 
 * 1.[安装 Kubernetes](#安装Kubernetes)
   * [安装Container Runtime Environment](#安装Container-Runtime-Environment)
-  * [设置 Docker 仓库（可选）](#设置Docker仓库（可选）)
+  * [设置 Docker 仓库（可选）](#可选-设置Docker仓库)
   * [创建 Kubernetes 集群](#创建Kubernetes集群)
   * [安装网络插件](#安装网络插件)
   * [安装 NVIDIA 插件](#安装NVIDIA插件)

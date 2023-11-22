@@ -7,17 +7,17 @@
 Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）、内存、存储和带宽）参与分散式计算网络的个人或组织。它们的主要角色是执行用户在 Lagrange 平台上发布的任务。
 
 * 0.[准备工作](#准备工作) 
-* 1.[安装 Kubernetes](#安装-Kubernetes)
+* 1.[安装 Kubernetes](#安装Kubernetes)
   * [安装Container Runtime Environment](#安装Container-Runtime-Environment)
-  * [设置 Docker 仓库（可选）](#设置-Docker-仓库（可选）)
-  * [创建 Kubernetes 集群](#创建-Kubernetes-集群)
+  * [设置 Docker 仓库（可选）](#设置Docker-仓库（可选）)
+  * [创建 Kubernetes 集群](#创建Kubernetes-集群)
   * [安装网络插件](#安装网络插件)
-  * [安装 NVIDIA 插件](#安装-NVIDIA-插件)
+  * [安装 NVIDIA 插件](#安装NVIDIA-插件)
   * [安装 Ingress-nginx 控制器](#安装-Ingress-nginx-控制器)
-* 2.[安装和配置 Nginx](#安装和配置-Nginx)
-* 3.[安装Hardware resource-exporter](#安装-Hardware-resource-exporter)
-* 4.[安装 Redis 服务](#安装-Redis-服务)
-* 5.[部署和配置Computing Provider](#部署和配置-Computing-Provider)
+* 2.[安装和配置 Nginx](#安装和配置Nginx)
+* 3.[安装Hardware resource-exporter](#安装Hardware-resource-exporter)
+* 4.[安装 Redis 服务](#安装Redis-服务)
+* 5.[部署和配置Computing Provider](#部署和配置Computing-Provider)
 * 6.[安装 AI Inference Dependency（可选）](#安装-AI-Inference-Dependency（可选）)
 * 7.[启动Computing Provider](#启动-Computing-Provider)
 * 8.[Computing Provider的 CLI](#Computing-Provider的-CLI)
@@ -383,7 +383,7 @@ UserName = ""                                 # 登录用户名，如果只有�
 Password = ""                                 # 登录密码，如果只有一个节点，可以忽略
 ```
 
-## 安装AI Inference 依赖项
+## 安装AI Inference依赖项
 
 对于计算提供者来说，部署AI inference 端点是必要的。但如果您不想支持此功能，可以跳过它。
 

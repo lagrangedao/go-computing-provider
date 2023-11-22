@@ -16,7 +16,7 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
   * [安装 Ingress-nginx 控制器](#安装Ingress-nginx控制器)
 * 2.[安装和配置 Nginx](#安装和配置Nginx)
 * 3.[安装Hardware resource-exporter](#安装Hardware-resource-exporter)
-* 4.[安装 Redis 服务](#安装Redis服务)
+* 4.[安装 Redis service](#安装Redis-service)
 * 5.[部署和配置Computing Provider](#部署和配置Computing-Provider)
 * 6.[安装 AI Inference Dependency（可选）](#安装AI-Inference-Dependency（可选）)
 * 7.[启动Computing Provider](#启动Computing-Provider)

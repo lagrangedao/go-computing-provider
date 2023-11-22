@@ -2,7 +2,7 @@
 
 ## Computing Provider
 
-[![Discord](https://img.shields.io/discord/770382203782692945?label=Discord\&logo=Discord)](https://discord.gg/MSXGzVsSYf) [![Twitter Follow](https://img.shields.io/twitter/follow/swan\_chain)](https://twitter.com/swan\_chain) [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg)](https://github.com/RichardLitt/standard-readme)
+[![Discord](https://img.shields.io/discord/770382203782692945?label=Discord\&logo=Discord)](https://discord.gg/Jd2BFSVCKw) [![Twitter Follow](https://img.shields.io/twitter/follow/swan\_chain)](https://twitter.com/swan\_chain) [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg)](https://github.com/RichardLitt/standard-readme)
 
 Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）、内存、存储和带宽）参与分散式计算网络的个人或组织。它们的主要角色是执行用户在 Lagrange 平台上发布的任务。
 

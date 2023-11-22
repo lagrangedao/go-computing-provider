@@ -59,7 +59,7 @@ Kubernetes版本应为`v1.24.0+`
 
 `Containerd`是一种符合行业标准的容器运行时(Container Runtime)，可用作Docker的替代方案。要在系统上安装`containerd`，请按照[containerd入门](https://github.com/containerd/containerd/blob/main/docs/getting-started.md)上的说明操作。
 
-### 可选 - 设置Docker仓库
+### 可选-设置Docker仓库
 
 **如果您使用Docker且只有一个节点，则可以跳过此步骤**。
 

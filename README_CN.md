@@ -17,10 +17,10 @@ Computing Provider是通过提供计算资源（如处理能力（CPU 和 GPU）
 * 2.[安装和配置 Nginx](#安装和配置-Nginx)
 * 3.[安装Hardware resource-exporter](#安装-Hardware-resource-exporter)
 * 4.[安装 Redis 服务](#安装-Redis-服务)
-* 5.[部署和配置Computing Provider](./#5-bu-shu-he-pei-zhi-computing-provider) [部署和配置Computing Provider](#部署和配置-Computing-Provider)
-* 6.[安装 AI Inference Dependency（可选）](./#6-an-zhuang-ai-inference-yi-lai-xiang) [安装 AI Inference Dependency（可选）](#安装-AI-Inference-Dependency（可选）)
-* 7.[启动Computing Provider](./#7-qi-dong-computing-provider) [启动Computing Provider](#启动-Computing-Provider)
-* 8.[Computing Provider的 CLI](./#8-computing-provider-de-cli) [Computing Provider的 CLI](#Computing-Provider的-CLI)
+* 5.[部署和配置Computing Provider](#部署和配置-Computing-Provider)
+* 6.[安装 AI Inference Dependency（可选）](#安装-AI-Inference-Dependency（可选）)
+* 7.[启动Computing Provider](#启动-Computing-Provider)
+* 8.[Computing Provider的 CLI](#Computing-Provider的-CLI)
 
 
 ## 准备工作

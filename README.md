@@ -1,4 +1,8 @@
 # Computing Provider
+[![Discord](https://img.shields.io/discord/770382203782692945?label=Discord&logo=Discord)](https://discord.gg/Jd2BFSVCKw)
+[![Twitter Follow](https://img.shields.io/twitter/follow/swan_chain)](https://twitter.com/swan_chain)
+[![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg)](https://github.com/RichardLitt/standard-readme)
+
 A computing provider is an individual or organization that participates in the decentralized computing network by offering computational resources such as processing power (CPU and GPU), memory, storage, and bandwidth. Their primary role is to execute tasks posted by users on the Lagrange platform.
 
 
@@ -16,8 +20,9 @@ A computing provider is an individual or organization that participates in the d
  - [Install the Hardware resource-exporter](#Install-the-Hardware-resource-exporter)
  - [Install the Redis service](#Install-the-Redis-service)
  - [Build and config the Computing Provider](#Build-and-config-the-Computing-Provider)
- - [Start the Computing Provider](#Start-the-Computing-Provider) 
-
+ - [Install AI Inference Dependency(Optional)](#Install-AI-Inference-Dependency)
+ - [Start the Computing Provider](#Start-the-Computing-Provider)
+ - [CLI of Computing Provider](#CLI-of-Computing-Provider)
 
 ## Prerequisites
 Before you install the Computing Provider, you need to know there are some resources required:
@@ -31,7 +36,6 @@ wget -c https://golang.org/dl/go1.19.7.linux-amd64.tar.gz -O - | sudo tar -xz -C
 
 echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc && source ~/.bashrc
 ```
-
 
 ## Install the Kubernetes
 The Kubernetes version should be `v1.24.0+`
@@ -273,6 +277,7 @@ EOF
 ```
 If you have installed it correctly, you can see the result shown in the figure by the command:
 `kubectl get po -n kube-system`
+
 ![7](https://github.com/lagrangedao/go-computing-provider/assets/102578774/38b0e15f-5ff9-4edc-a313-d0f6f4a0bda8)
 
 ### Install Redis service
@@ -295,17 +300,15 @@ systemctl start redis-server.service
 	Firstly, clone the code to your local:
 ```bash
 git clone https://github.com/lagrangedao/go-computing-provider.git
-git checkout mars-testnet
+cd go-computing-provider
+git checkout v0.3.0
 ```
 
 Then build the Computing provider follow the below steps:
 
 ```bash
-cd go-computing-provider
-
-go mod tidy
-
-go build -o computing-provider main.go
+make clean && make
+make install
 ```
  - Update Configuration 
 The computing provider's configuration sample locate in `./go-computing-provider/config.toml.sample`
@@ -325,6 +328,10 @@ Domain = ""                                     # The domain name
 RedisUrl = "redis://127.0.0.1:6379"           # The redis server address
 RedisPassword = ""                            # The redis server access password
 
+[LOG]
+CrtFile = "/YOUR_DOMAIN_NAME_CRT_PATH/server.crt"	# Your domain name SSL .crt file path
+KeyFile = "/YOUR_DOMAIN_NAME_KEY_PATH/server.key"   	# Your domain name SSL .key file path
+
 [LAG]
 ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
 AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
@@ -332,27 +339,47 @@ AccessToken = ""                              # Lagrange access token, acquired 
 
 [MCS]
 ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
-AccessToken = ""                              # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
 BucketName = ""                               # Acquired from "https://www.multichain.storage" -> bucket -> Add Bucket
 Network = "polygon.mainnet"                   # polygon.mainnet for mainnet, polygon.mumbai for testnet
-FileCachePath = "/tmp"                            # Cache directory of job data
+FileCachePath = "/tmp"                        # Cache directory of job data
 
 [Registry]                                    
 ServerAddress = ""                            # The docker container image registry address, if only a single node, you can ignore
 UserName = ""                                 # The login username, if only a single node, you can ignore
 Password = ""                                 # The login password, if only a single node, you can ignore
 ```
+## Install AI Inference Dependency
+It is necessary for Computing Provider to deploy the  AI inference endpoint. But if you do not want to support the feature, you can skip it.
+```bash
+export CP_PATH=xxx
+./install.sh
+```
 
 
 ## Start the Computing Provider
-You can run computing-provider using the following command:
+You can run `computing-provider` using the following command
 ```bash
-nohup ./computing-provider >> cp.log 2>&1 & 
+export CP_PATH=xxx
+nohup computing-provider run >> cp.log 2>&1 & 
+```
+
+## CLI of Computing Provider
+* Check the current list of tasks running on CP, display detailed information for tasks using `-v`
+```
+computing-provider task list 
+```
+* Retrieve detailed information for a specific task using `space_uuid`
+```
+computing-provider task get [space_uuid]
+```
+* Delete task by `space_uuid`
+```
+computing-provider task delete [space_uuid]
 ```
 
 ## Getting Help
 
-For usage questions or issues reach out to the Filswan team either in the [Discord channel](https://discord.gg/3uQUWzaS7U) or open a new issue here on GitHub.
+For usage questions or issues reach out to the Swan team either in the [Discord channel](https://discord.gg/3uQUWzaS7U) or open a new issue here on GitHub.
 
 ## License
 

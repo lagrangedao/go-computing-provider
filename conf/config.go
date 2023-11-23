@@ -3,7 +3,6 @@ package conf
 import (
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
@@ -14,6 +13,7 @@ var config *ComputeNode
 // ComputeNode is a compute node config
 type ComputeNode struct {
 	API      API
+	LOG      LOG
 	LAG      LAG
 	MCS      MCS
 	Registry Registry
@@ -26,6 +26,11 @@ type API struct {
 	RedisPassword string
 	Domain        string
 	NodeName      string
+}
+
+type LOG struct {
+	CrtFile string
+	KeyFile string
 }
 
 type LAG struct {
@@ -47,9 +52,8 @@ type Registry struct {
 	Password      string
 }
 
-func InitConfig() error {
-	currentDir, _ := os.Getwd()
-	configFile := filepath.Join(currentDir, "config.toml")
+func InitConfig(cpRepoPath string) error {
+	configFile := filepath.Join(cpRepoPath, "config.toml")
 
 	if metaData, err := toml.DecodeFile(configFile, &config); err != nil {
 		return fmt.Errorf("failed load config file, path: %s, error: %w", configFile, err)
@@ -68,6 +72,7 @@ func GetConfig() *ComputeNode {
 func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 	requiredFields := [][]string{
 		{"API"},
+		{"LOG"},
 		{"LAG"},
 		{"MCS"},
 		{"Registry"},
@@ -76,11 +81,13 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 		{"API", "Domain"},
 		{"API", "RedisUrl"},
 
+		{"LOG", "CrtFile"},
+		{"LOG", "KeyFile"},
+
 		{"LAG", "ServerUrl"},
 		{"LAG", "AccessToken"},
 
 		{"MCS", "ApiKey"},
-		{"MCS", "AccessToken"},
 		{"MCS", "BucketName"},
 		{"MCS", "Network"},
 		{"MCS", "FileCachePath"},

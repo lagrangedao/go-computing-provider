@@ -1,4 +1,4 @@
-package docker
+package computing
 
 import (
 	"archive/tar"
@@ -25,6 +25,8 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
+
+const BuildFileName = "build.log"
 
 type DockerService struct {
 	c *client.Client
@@ -207,7 +209,21 @@ func (ds *DockerService) BuildImage(buildPath, imageName string) error {
 		return err
 	}
 	defer buildResponse.Body.Close()
-	return printOut(buildResponse.Body)
+
+	logFile, err := os.Create(filepath.Join(buildPath, BuildFileName))
+	if err != nil {
+		return err
+	}
+	defer logFile.Close()
+
+	logWriters := []io.Writer{logFile, os.Stdout}
+	multiWriter := io.MultiWriter(logWriters...)
+
+	_, err = io.Copy(multiWriter, buildResponse.Body)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 type ErrorLine struct {
@@ -267,30 +283,6 @@ func printOut(rd io.Reader) error {
 	return nil
 }
 
-func (ds *DockerService) ListImages() (map[string]string, error) {
-	ctx := context.Background()
-	imageList, err := ds.c.ImageList(ctx, types.ImageListOptions{})
-	if err != nil {
-		logs.GetLogger().Errorf("Unable to list image, error: %+v", err)
-	}
-
-	var images = make(map[string]string)
-	for _, image := range imageList {
-		if len(image.RepoTags) == 0 || strings.EqualFold(image.RepoTags[0], "<none>:<none>") {
-			if err := ds.RemoveImage(image.ID); err != nil {
-				logs.GetLogger().Errorf("Failed delete unused image, error: %+v", err)
-				continue
-			}
-
-		} else {
-			for _, tag := range image.RepoTags {
-				images[tag] = image.ID
-			}
-		}
-	}
-	return images, nil
-}
-
 func (ds *DockerService) RemoveImage(imageId string) error {
 	ctx := context.Background()
 	_, err := ds.c.ImageRemove(ctx, imageId, types.ImageRemoveOptions{
@@ -301,20 +293,6 @@ func (ds *DockerService) RemoveImage(imageId string) error {
 }
 
 func (ds *DockerService) CleanResource() {
-	ctx := context.Background()
-	danglingFilters := filters.NewArgs()
-	danglingFilters.Add("dangling", "true")
-	_, err := ds.c.ImagesPrune(ctx, danglingFilters)
-	if err != nil {
-		logs.GetLogger().Errorf("Failed delete dangling image, error: %+v", err)
-		return
-	}
-
-	if _, err = ds.c.ContainersPrune(ctx, filters.NewArgs()); err != nil {
-		logs.GetLogger().Errorf("Failed delete unused container, error: %+v", err)
-		return
-	}
-
 	images, err := ds.c.ImageList(context.Background(), types.ImageListOptions{})
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get image list, error: %+v", err)
@@ -326,5 +304,19 @@ func (ds *DockerService) CleanResource() {
 			logs.GetLogger().Infof("start clean unused image, imageId: %s", image.ID)
 			ds.RemoveImage(image.ID)
 		}
+	}
+
+	ctx := context.Background()
+	danglingFilters := filters.NewArgs()
+	danglingFilters.Add("dangling", "true")
+	_, err = ds.c.ImagesPrune(ctx, danglingFilters)
+	if err != nil {
+		logs.GetLogger().Errorf("Failed delete dangling image, error: %+v", err)
+		return
+	}
+
+	if _, err = ds.c.ContainersPrune(ctx, filters.NewArgs()); err != nil {
+		logs.GetLogger().Errorf("Failed delete unused container, error: %+v", err)
+		return
 	}
 }

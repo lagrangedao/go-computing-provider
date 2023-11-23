@@ -358,22 +358,19 @@ MultiAddress = "/ip4/<public_ip>/tcp/<port>"    # 用于libp2p的multiAddress
 Domain = ""                                     # 域名
 
 RedisUrl = "redis://127.0.0.1:6379"           # Redis服务器地址
-RedisPassword = ""                            # Redis服务器访问
-
-密码
+RedisPassword = ""                            # Redis服务器访问密码
 
 [LOG]
 CrtFile = "/YOUR_DOMAIN_NAME_CRT_PATH/server.crt"	# 您的域名SSL .crt文件路径
 KeyFile = "/YOUR_DOMAIN_NAME_KEY_PATH/server.key"   	# 您的域名SSL .key文件路径
 
 [LAG]
-ServerUrl = "https://api.lagrangedao.org"     # lagrangedao.org的API地址
-AccessToken = ""                              # Lagrange访问令牌，从“https://lagrangedao.org -> 设置 -> 访问令牌 -> 新建令牌”获取
-
+ServerUrl = "https://api.lagrangedao.org"     # Lagrange的API地址
+AccessToken = ""                              # Lagrange访问令牌，从“(https://lagrangedao.org  -> setting -> Access Tokens -> New token)”获取
 
 [MCS]
-ApiKey = ""                                   # 从“https://www.multichain.storage” -> 设置 -> 创建API密钥 获取
-BucketName = ""                               # 从“https://www.multichain.storage” -> bucket -> 添加Bucket 获取
+ApiKey = ""                                   # 从"https://www.multichain.storage" -> setting -> Create API Key 获取
+BucketName = ""                               # 从"https://www.multichain.storage" -> bucket -> Add Bucket 获取
 Network = "polygon.mainnet"                   # 主网使用polygon.mainnet，测试网使用polygon.mumbai
 FileCachePath = "/tmp"                        # 任务数据的缓存目录
 

@@ -1,9 +1,10 @@
 package models
 
 type ClusterResource struct {
-	NodeId      string          `json:"node_id"`
-	Region      string          `json:"region"`
-	ClusterInfo []*NodeResource `json:"cluster_info"`
+	NodeId        string          `json:"node_id"`
+	Region        string          `json:"region"`
+	ClusterInfo   []*NodeResource `json:"cluster_info"`
+	PublicAddress string          `json:"public_address"`
 }
 
 type NodeResource struct {

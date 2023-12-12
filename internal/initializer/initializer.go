@@ -17,9 +17,10 @@ func sendHeartbeat(nodeId string) {
 	// Replace the following URL with your Flask application's heartbeat endpoint URL
 	heartbeatURL := conf.GetConfig().LAG.ServerUrl + "/cp/heartbeat"
 	payload := strings.NewReader(fmt.Sprintf(`{
+	"public_address": "%s",
     "node_id": "%s",
     "status": "Active"
-}`, nodeId))
+}`, conf.GetConfig().LAG.WalletAddress, nodeId))
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", heartbeatURL, payload)
@@ -32,12 +33,12 @@ func sendHeartbeat(nodeId string) {
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the LAD server: %v", err)
+		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the Swan Hub server: %v", err)
 		computing.Reconnect(nodeId)
 	} else {
 		_, err := ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			logs.GetLogger().Warningln("Retrying to connect to the LAD server")
+			logs.GetLogger().Warningln("Retrying to connect to the Swan Hub server")
 			computing.Reconnect(nodeId)
 		}
 		if err != nil {

@@ -34,9 +34,11 @@ type LOG struct {
 }
 
 type LAG struct {
-	WalletAddress string
-	ServerUrl     string
-	AccessToken   string
+	WalletAddress  string
+	ServerUrl      string
+	AccessToken    string
+	LagServerUrl   string
+	LagAccessToken string
 }
 
 type MCS struct {

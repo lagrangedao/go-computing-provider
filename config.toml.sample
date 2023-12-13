@@ -16,6 +16,10 @@ ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
 AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
 WalletAddress = ""                            # The cp wallet address
 
+LagServerUrl = "https://api.lagrangedao.org"
+LagAccessToken = ""
+
+
 [MCS]
 ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
 BucketName = ""                               # Acquired from "https://www.multichain.storage" -> bucket -> Add Bucket

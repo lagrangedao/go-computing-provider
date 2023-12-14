@@ -1,7 +1,9 @@
 package conf
 
 import (
+	"fmt"
 	"github.com/BurntSushi/toml"
+	"os"
 	"path/filepath"
 )
 
@@ -59,8 +61,13 @@ func GetRpcByName(rpcName string) (string, error) {
 }
 
 func loadConfig() (*ChainConfig, error) {
+	cpPath, exit := os.LookupEnv("CP_PATH")
+	if !exit {
+		return nil, fmt.Errorf("missing CP_PATH env, please set export CP_PATH=xxx")
+	}
+	configFilePath := filepath.Join(cpPath, "config.toml")
+
 	var chainConfig ChainConfig
-	configFilePath := filepath.Join("", "config.toml")
 	if _, err := toml.DecodeFile(configFilePath, &chainConfig); err != nil {
 		return nil, err
 	}

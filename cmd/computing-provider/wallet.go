@@ -3,15 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/hex"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/lagrangedao/go-computing-provider/wallet"
 	"github.com/lagrangedao/go-computing-provider/wallet/conf"
-	"github.com/lagrangedao/go-computing-provider/wallet/contract/swan_token"
-	"github.com/lagrangedao/go-computing-provider/wallet/tablewriter"
 	"github.com/urfave/cli/v2"
 	"os"
 	"os/signal"
@@ -83,68 +78,7 @@ var walletList = &cli.Command{
 			return err
 		}
 
-		addrs, err := localWallet.WalletList(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Map Keys. Corresponds to the standard tablewriter output
-		addressKey := "Address"
-		balanceKey := "Balance"
-		nonceKey := "Nonce"
-		errorKey := "Error"
-
-		chainRpc, err := conf.GetRpcByName(chainName)
-		if err != nil {
-			return err
-		}
-		client, err := ethclient.Dial(chainRpc)
-		if err != nil {
-			return err
-		}
-		defer client.Close()
-
-		var wallets []map[string]interface{}
-		for _, addr := range addrs {
-			var balance string
-			if contractFlag {
-				tokenStub, err := swan_token.NewTokenStub(client, swan_token.WithPublicKey(addr))
-				if err == nil {
-					balance, err = tokenStub.BalanceOf()
-				}
-			} else {
-				balance, err = wallet.Balance(ctx, client, addr)
-			}
-
-			var errmsg string
-			if err != nil {
-				errmsg = err.Error()
-			}
-
-			nonce, err := client.PendingNonceAt(context.Background(), common.HexToAddress(addr))
-			if err != nil {
-				errmsg = err.Error()
-			}
-
-			wallet := map[string]interface{}{
-				addressKey: addr,
-				balanceKey: balance,
-				errorKey:   errmsg,
-				nonceKey:   nonce,
-			}
-			wallets = append(wallets, wallet)
-		}
-
-		tw := tablewriter.New(
-			tablewriter.Col(addressKey),
-			tablewriter.Col(balanceKey),
-			tablewriter.Col(nonceKey),
-			tablewriter.NewLineCol(errorKey))
-
-		for _, wallet := range wallets {
-			tw.Write(wallet)
-		}
-		return tw.Flush(os.Stdout)
+		return localWallet.WalletList(ctx, chainName, contractFlag)
 	},
 }
 
@@ -258,17 +192,57 @@ var walletSign = &cli.Command{
 		}
 
 		addr := cctx.Args().First()
+		if strings.TrimSpace(addr) == "" {
+			return fmt.Errorf("failed to parse sign address")
+		}
 
-		msg, err := hex.DecodeString(cctx.Args().Get(1))
-		if err != nil {
-			return err
+		msg := cctx.Args().Get(1)
+		if strings.TrimSpace(msg) == "" {
+			return fmt.Errorf("failed to parse message")
 		}
 
 		sig, err := localWallet.WalletSign(ctx, addr, []byte(msg))
 		if err != nil {
 			return err
 		}
-		fmt.Println(hexutil.Encode(sig.Data))
+		fmt.Println(sig)
+		return nil
+	},
+}
+
+var walletVerify = &cli.Command{
+	Name:      "verify",
+	Usage:     "verify the signature of a message",
+	ArgsUsage: "<signing address>  <signature> <rawMessage>",
+	Action: func(cctx *cli.Context) error {
+		ctx := reqContext(cctx)
+
+		if cctx.NArg() != 3 {
+			return fmt.Errorf("incorrect number of arguments, requires 3 parameters")
+		}
+
+		addr := cctx.Args().First()
+
+		sigBytes, err := hexutil.Decode(cctx.Args().Get(1))
+		if err != nil {
+			return err
+		}
+
+		messageData := cctx.Args().Get(2)
+		if strings.TrimSpace(messageData) == "" {
+			return fmt.Errorf("failed to get raw message")
+		}
+
+		localWallet, err := wallet.SetupWallet(wallet.WalletRepo)
+		if err != nil {
+			return err
+		}
+
+		pass, err := localWallet.WalletVerify(ctx, addr, sigBytes, messageData)
+		if err != nil {
+			return err
+		}
+		fmt.Println(pass)
 		return nil
 	},
 }
@@ -331,43 +305,6 @@ var walletSend = &cli.Command{
 	},
 }
 
-var walletVerify = &cli.Command{
-	Name:      "verify",
-	Usage:     "verify the signature of a message",
-	ArgsUsage: "<signing address> <hexMessage> <signature>",
-	Action: func(cctx *cli.Context) error {
-		ctx := reqContext(cctx)
-
-		if cctx.NArg() != 3 {
-			return fmt.Errorf("incorrect number of arguments, requires 3 parameters")
-		}
-
-		addr := cctx.Args().First()
-		msg, err := hex.DecodeString(cctx.Args().Get(1))
-		if err != nil {
-			return err
-		}
-
-		sigBytes, err := hex.DecodeString(cctx.Args().Get(2))
-		if err != nil {
-			return err
-		}
-
-		localWallet, err := wallet.SetupWallet(wallet.WalletRepo)
-		if err != nil {
-			return err
-		}
-		var sign = new(wallet.Signature)
-		sign.Data = sigBytes
-		pass, err := localWallet.WalletVerify(ctx, sign, addr, msg)
-		if err != nil {
-			return err
-		}
-		fmt.Println(pass)
-		return nil
-	},
-}
-
 var CollateralCmd = &cli.Command{
 	Name:      "collateral",
 	Usage:     "Manage the collateral amount to the hub",
@@ -380,7 +317,8 @@ var CollateralCmd = &cli.Command{
 		},
 	},
 	Subcommands: []*cli.Command{
-		infoCmd,
+		collateralInfoCmd,
+		collateralWithdrawCmd,
 	},
 	Action: func(cctx *cli.Context) error {
 		ctx := reqContext(cctx)
@@ -416,10 +354,9 @@ var CollateralCmd = &cli.Command{
 	},
 }
 
-var infoCmd = &cli.Command{
-	Name:      "info",
-	Usage:     "View staking wallet details",
-	ArgsUsage: "[fromAddress]",
+var collateralInfoCmd = &cli.Command{
+	Name:  "info",
+	Usage: "View staking wallet details",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:  "chain",
@@ -429,18 +366,10 @@ var infoCmd = &cli.Command{
 	},
 	Action: func(cctx *cli.Context) error {
 		ctx := reqContext(cctx)
-		if cctx.NArg() != 1 {
-			return fmt.Errorf("need the params: from address")
-		}
 
 		chain := cctx.String("chain")
 		if strings.TrimSpace(chain) == "" {
 			return fmt.Errorf("failed to parse chain: %s", chain)
-		}
-
-		from := cctx.Args().Get(0)
-		if strings.TrimSpace(from) == "" {
-			return fmt.Errorf("failed to parse from address: %s", from)
 		}
 
 		localWallet, err := wallet.SetupWallet(wallet.WalletRepo)
@@ -448,7 +377,52 @@ var infoCmd = &cli.Command{
 			return err
 		}
 
-		return localWallet.CollateralInfo(ctx, chain, from)
+		return localWallet.CollateralInfo(ctx, chain)
+	},
+}
+
+var collateralWithdrawCmd = &cli.Command{
+	Name:      "withdraw",
+	Usage:     "Withdraw funds from the collateral contract",
+	ArgsUsage: "[targetAddress] [amount]",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "chain",
+			Usage: "Specify which rpc connection chain to use",
+			Value: conf.DefaultRpc,
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		ctx := reqContext(cctx)
+		if cctx.NArg() != 2 {
+			return fmt.Errorf("need two params: the to address and amount")
+		}
+
+		chain := cctx.String("chain")
+		if strings.TrimSpace(chain) == "" {
+			return fmt.Errorf("failed to parse chain: %s", chain)
+		}
+
+		to := cctx.Args().Get(0)
+		if strings.TrimSpace(to) == "" {
+			return fmt.Errorf("failed to parse to address: %s", to)
+		}
+
+		amount := cctx.Args().Get(1)
+		if strings.TrimSpace(amount) == "" {
+			return fmt.Errorf("failed to get amount: %s", chain)
+		}
+
+		localWallet, err := wallet.SetupWallet(wallet.WalletRepo)
+		if err != nil {
+			return err
+		}
+		txHash, err := localWallet.CollateralWithdraw(ctx, chain, to, amount)
+		if err != nil {
+			return err
+		}
+		fmt.Println(txHash)
+		return nil
 	},
 }
 

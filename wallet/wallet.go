@@ -71,20 +71,33 @@ func NewWallet(keystore KeyStore) (*LocalWallet, error) {
 	return w, nil
 }
 
-func (w *LocalWallet) WalletSign(ctx context.Context, addr string, msg []byte) (*Signature, error) {
+func (w *LocalWallet) WalletSign(ctx context.Context, addr string, msg []byte) (string, error) {
 	ki, err := w.findKey(addr)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if ki == nil {
-		return nil, xerrors.Errorf("signing using key '%s': %w", addr, ErrKeyInfoNotFound)
+		return "", xerrors.Errorf("signing using private key '%s': %w", addr, ErrKeyInfoNotFound)
 	}
-
-	return Sign(ki.PrivateKey, msg)
+	signByte, err := Sign(ki.PrivateKey, msg)
+	if err != nil {
+		return "", err
+	}
+	return hexutil.Encode(signByte), nil
 }
 
-func (w *LocalWallet) WalletVerify(ctx context.Context, sign *Signature, addr string, msg []byte) (bool, error) {
-	return Verify(sign, addr, msg)
+func (w *LocalWallet) WalletVerify(ctx context.Context, addr string, sigByte []byte, data string) (bool, error) {
+	hash := crypto.Keccak256Hash([]byte(data))
+
+	ki, err := w.findKey(addr)
+	if err != nil {
+		return false, err
+	}
+	if ki == nil {
+		return false, xerrors.Errorf("signing using private key '%s': %w", addr, ErrKeyInfoNotFound)
+	}
+
+	return Verify(ki.PrivateKey, sigByte, hash.Bytes())
 }
 
 func (w *LocalWallet) findKey(addr string) (*KeyInfo, error) {
@@ -154,20 +167,68 @@ func (w *LocalWallet) WalletImport(ctx context.Context, ki *KeyInfo) (string, er
 	return "", nil
 }
 
-func (w *LocalWallet) WalletList(ctx context.Context) ([]string, error) {
-	all, err := w.keystore.List()
+func (w *LocalWallet) WalletList(ctx context.Context, chainName string, contractFlag bool) error {
+	addressList, err := w.addressList(ctx)
 	if err != nil {
-		return nil, xerrors.Errorf("listing keystore: %w", err)
+		return err
 	}
 
-	out := make([]string, 0, len(all))
-	for _, a := range all {
-		if strings.HasPrefix(a, KNamePrefix) {
-			addr := strings.TrimPrefix(a, KNamePrefix)
-			out = append(out, addr)
-		}
+	addressKey := "Address"
+	balanceKey := "Balance"
+	nonceKey := "Nonce"
+	errorKey := "Error"
+
+	chainRpc, err := conf.GetRpcByName(chainName)
+	if err != nil {
+		return err
 	}
-	return out, nil
+	client, err := ethclient.Dial(chainRpc)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	var wallets []map[string]interface{}
+	for _, addr := range addressList {
+		var balance string
+		if contractFlag {
+			tokenStub, err := swan_token.NewTokenStub(client, swan_token.WithPublicKey(addr))
+			if err == nil {
+				balance, err = tokenStub.BalanceOf()
+			}
+		} else {
+			balance, err = Balance(ctx, client, addr)
+		}
+
+		var errmsg string
+		if err != nil {
+			errmsg = err.Error()
+		}
+
+		nonce, err := client.PendingNonceAt(context.Background(), common.HexToAddress(addr))
+		if err != nil {
+			errmsg = err.Error()
+		}
+
+		wallet := map[string]interface{}{
+			addressKey: addr,
+			balanceKey: balance,
+			errorKey:   errmsg,
+			nonceKey:   nonce,
+		}
+		wallets = append(wallets, wallet)
+	}
+
+	tw := tablewriter.New(
+		tablewriter.Col(addressKey),
+		tablewriter.Col(balanceKey),
+		tablewriter.Col(nonceKey),
+		tablewriter.NewLineCol(errorKey))
+
+	for _, wallet := range wallets {
+		tw.Write(wallet)
+	}
+	return tw.Flush(os.Stdout)
 }
 
 func (w *LocalWallet) WalletNew(ctx context.Context) (string, error) {
@@ -273,7 +334,7 @@ func (w *LocalWallet) WalletCollateral(ctx context.Context, chainName string, fr
 		return "", err
 	}
 	if ki == nil {
-		return "", xerrors.Errorf("the address: %s, private %w,", from, ErrKeyInfoNotFound)
+		return "", xerrors.Errorf("the address: %s, private key %w,", from, ErrKeyInfoNotFound)
 	}
 
 	client, err := ethclient.Dial(chainUrl)
@@ -324,46 +385,117 @@ func (w *LocalWallet) WalletCollateral(ctx context.Context, chainName string, fr
 	}
 }
 
-func (w *LocalWallet) CollateralInfo(ctx context.Context, chainName string, from string) error {
-	chainUrl, err := conf.GetRpcByName(chainName)
+func (w *LocalWallet) CollateralInfo(ctx context.Context, chainName string) error {
+	addrs, err := w.addressList(ctx)
 	if err != nil {
 		return err
 	}
 
-	client, err := ethclient.Dial(chainUrl)
+	addressKey := "Address"
+	balanceKey := "Balance"
+	collateralKey := "Collateral"
+	errorKey := "Error"
+
+	chainRpc, err := conf.GetRpcByName(chainName)
+	if err != nil {
+		return err
+	}
+	client, err := ethclient.Dial(chainRpc)
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	tokenStub, err := swan_token.NewTokenStub(client, swan_token.WithPublicKey(from))
-	if err != nil {
-		return err
-	}
-	tokenBalance, err := tokenStub.BalanceOf()
+	var wallets []map[string]interface{}
+	for _, addr := range addrs {
+		var balance, collateralBalance string
+		tokenStub, err := swan_token.NewTokenStub(client, swan_token.WithPublicKey(addr))
+		if err == nil {
+			balance, err = tokenStub.BalanceOf()
+		}
 
-	addressKey := "Address"
-	balanceKey := "Balance"
-	collateralKey := "Collateral"
+		collateralStub, err := collateral.NewCollateralStub(client, collateral.WithPublicKey(addr))
+		if err == nil {
+			collateralBalance, err = collateralStub.Balances()
+		}
 
-	collateralStub, err := collateral.NewCollateralStub(client, collateral.WithPublicKey(from))
-	if err != nil {
-		return err
-	}
-	collateralBalance, err := collateralStub.Balances()
+		var errmsg string
+		if err != nil {
+			errmsg = err.Error()
+		}
 
-	addressInfo := map[string]interface{}{
-		addressKey:    from,
-		balanceKey:    tokenBalance,
-		collateralKey: collateralBalance,
+		wallet := map[string]interface{}{
+			addressKey:    addr,
+			balanceKey:    balance,
+			collateralKey: collateralBalance,
+			errorKey:      errmsg,
+		}
+		wallets = append(wallets, wallet)
 	}
 
 	tw := tablewriter.New(
 		tablewriter.Col(addressKey),
 		tablewriter.Col(balanceKey),
-		tablewriter.Col(collateralKey))
-	tw.Write(addressInfo)
+		tablewriter.Col(collateralKey),
+		tablewriter.NewLineCol(errorKey))
+
+	for _, wallet := range wallets {
+		tw.Write(wallet)
+	}
 	return tw.Flush(os.Stdout)
+}
+
+func (w *LocalWallet) CollateralWithdraw(ctx context.Context, chainName string, to string, amount string) (string, error) {
+	withDrawAmount, err := convertToWei(amount)
+	if err != nil {
+		return "", err
+	}
+
+	chainUrl, err := conf.GetRpcByName(chainName)
+	if err != nil {
+		return "", err
+	}
+
+	ki, err := w.findKey(to)
+	if err != nil {
+		return "", err
+	}
+	if ki == nil {
+		return "", xerrors.Errorf("the address: %s, private key %w,", to, ErrKeyInfoNotFound)
+	}
+
+	client, err := ethclient.Dial(chainUrl)
+	if err != nil {
+		return "", err
+	}
+	defer client.Close()
+
+	collateralStub, err := collateral.NewCollateralStub(client, collateral.WithPrivateKey(ki.PrivateKey))
+	if err != nil {
+		return "", err
+	}
+	withdrawHash, err := collateralStub.Withdraw(withDrawAmount)
+	if err != nil {
+		return "", err
+	}
+
+	return withdrawHash, nil
+}
+
+func (w *LocalWallet) addressList(ctx context.Context) ([]string, error) {
+	all, err := w.keystore.List()
+	if err != nil {
+		return nil, xerrors.Errorf("listing keystore: %w", err)
+	}
+
+	addressList := make([]string, 0, len(all))
+	for _, a := range all {
+		if strings.HasPrefix(a, KNamePrefix) {
+			addr := strings.TrimPrefix(a, KNamePrefix)
+			addressList = append(addressList, addr)
+		}
+	}
+	return addressList, nil
 }
 
 func convertToWei(ethValue string) (*big.Int, error) {

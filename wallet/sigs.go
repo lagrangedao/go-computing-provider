@@ -14,26 +14,17 @@ type Signature struct {
 }
 
 // Sign takes in signature type, private key and message. Returns a signature for that message.
-func Sign(privatekey string, msg []byte) (*Signature, error) {
+func Sign(privatekey string, msg []byte) ([]byte, error) {
 	privateKey, err := crypto.HexToECDSA(privatekey)
 	if err != nil {
 		return nil, err
 	}
-
 	hash := crypto.Keccak256Hash(msg)
-
-	sig, err := crypto.Sign(hash.Bytes(), privateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Signature{
-		Data: sig,
-	}, nil
+	return crypto.Sign(hash.Bytes(), privateKey)
 }
 
 // Verify verifies signatures
-func Verify(sig *Signature, addr string, msg []byte) (bool, error) {
+func Verify(addr string, signature, dataHash []byte) (bool, error) {
 	privateKey, err := crypto.HexToECDSA(addr)
 	if err != nil {
 		return false, err
@@ -44,13 +35,10 @@ func Verify(sig *Signature, addr string, msg []byte) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
 	}
-
 	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
-	hash := crypto.Keccak256Hash(msg)
-	signature := sig.Data
 
 	signatureNoRecoverID := signature[:len(signature)-1]
-	verified := crypto.VerifySignature(publicKeyBytes, hash.Bytes(), signatureNoRecoverID)
+	verified := crypto.VerifySignature(publicKeyBytes, dataHash, signatureNoRecoverID)
 
 	return verified, nil
 }

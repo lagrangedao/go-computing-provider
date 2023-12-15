@@ -27,6 +27,8 @@ func main() {
 		Commands: []*cli.Command{
 			runCmd,
 			taskCmd,
+			walletCmd,
+			CollateralCmd,
 		},
 	}
 	app.Setup()

@@ -18,6 +18,7 @@ type ComputingProvider struct {
 	Autobid       int    `json:"autobid"`
 	WalletAddress int    `json:"wallet_address"`
 	Status        string `json:"status"`
+	PublicAddress string `json:"public_address"`
 }
 
 type JobData struct {

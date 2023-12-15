@@ -80,8 +80,9 @@ func (s *ScheduleTask) Run() {
 
 func reportJobStatus(jobUuid string, jobStatus models2.JobStatus) {
 	reqParam := map[string]interface{}{
-		"job_uuid": jobUuid,
-		"status":   jobStatus,
+		"job_uuid":       jobUuid,
+		"status":         jobStatus,
+		"public_address": conf.GetConfig().LAG.WalletAddress,
 	}
 
 	payload, err := json.Marshal(reqParam)
@@ -209,9 +210,10 @@ func reportClusterResource(location, nodeId string) {
 		return
 	}
 	clusterSource := models2.ClusterResource{
-		NodeId:      nodeId,
-		Region:      location,
-		ClusterInfo: statisticalSources,
+		NodeId:        nodeId,
+		Region:        location,
+		ClusterInfo:   statisticalSources,
+		PublicAddress: conf.GetConfig().LAG.WalletAddress,
 	}
 
 	payload, err := json.Marshal(clusterSource)

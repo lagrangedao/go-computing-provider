@@ -34,8 +34,11 @@ type LOG struct {
 }
 
 type LAG struct {
-	ServerUrl   string
-	AccessToken string
+	WalletAddress  string
+	ServerUrl      string
+	AccessToken    string
+	LagServerUrl   string
+	LagAccessToken string
 }
 
 type MCS struct {
@@ -86,6 +89,7 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 
 		{"LAG", "ServerUrl"},
 		{"LAG", "AccessToken"},
+		{"LAG", "WalletAddress"},
 
 		{"MCS", "ApiKey"},
 		{"MCS", "BucketName"},

@@ -113,4 +113,5 @@ type CacheSpaceDetail struct {
 	DeployName    string
 	Hardware      string
 	Url           string
+	TaskUuid      string
 }

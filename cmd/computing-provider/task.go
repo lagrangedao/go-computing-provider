@@ -94,7 +94,7 @@ var taskList = &cli.Command{
 
 			if fullFlag {
 				taskData = append(taskData,
-					[]string{jobDetail.JobUuid, jobDetail.TaskType, jobDetail.WalletAddress, fullSpaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
+					[]string{jobDetail.TaskUuid, jobDetail.TaskType, jobDetail.WalletAddress, fullSpaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
 			} else {
 
 				var walletAddress string
@@ -102,9 +102,9 @@ var taskList = &cli.Command{
 					walletAddress = jobDetail.WalletAddress[:5] + "..." + jobDetail.WalletAddress[37:]
 				}
 
-				var jobUuid string
+				var taskUuid string
 				if len(jobDetail.JobUuid) > 0 {
-					jobUuid = "..." + jobDetail.JobUuid[26:]
+					taskUuid = "..." + jobDetail.TaskUuid[26:]
 				}
 
 				var spaceUuid string
@@ -113,7 +113,7 @@ var taskList = &cli.Command{
 				}
 
 				taskData = append(taskData,
-					[]string{jobUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
+					[]string{taskUuid, jobDetail.TaskType, walletAddress, spaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
 			}
 
 			var rowColor []tablewriter.Colors
@@ -131,7 +131,7 @@ var taskList = &cli.Command{
 				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgGreenColor})
 			} else if spaceStatus == "Stopped" {
 				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgRedColor})
-			}else {
+			} else {
 				rowColor = append(rowColor, tablewriter.Colors{tablewriter.Bold, tablewriter.FgYellowColor})
 			}
 
@@ -219,7 +219,7 @@ var taskDetail = &cli.Command{
 			rowColor = []tablewriter.Colors{{tablewriter.Bold, tablewriter.FgRedColor}, {tablewriter.Bold, tablewriter.FgWhiteColor}}
 		}
 
-		header := []string{"TASK UUID:", jobDetail.JobUuid}
+		header := []string{"TASK UUID:", jobDetail.TaskUuid}
 
 		var rowColorList []RowColor
 		rowColorList = append(rowColorList, RowColor{
@@ -251,7 +251,7 @@ var taskDelete = &cli.Command{
 		computing.GetRedisClient()
 
 		spaceUuid := strings.ToLower(cctx.Args().First())
-		jobDetail, err := computing.RetrieveJobMetadata(constants.REDIS_FULL_PREFIX+spaceUuid)
+		jobDetail, err := computing.RetrieveJobMetadata(constants.REDIS_FULL_PREFIX + spaceUuid)
 		if err != nil {
 			return fmt.Errorf("failed get job detail: %s, error: %+v", spaceUuid, err)
 		}

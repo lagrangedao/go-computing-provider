@@ -36,9 +36,9 @@ func sendHeartbeat(nodeId string) {
 		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the Swan Hub server: %v", err)
 		computing.Reconnect(nodeId)
 	} else {
-		_, err := ioutil.ReadAll(resp.Body)
+		data, err := ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			logs.GetLogger().Warningln("Retrying to connect to the Swan Hub server")
+			logs.GetLogger().Warningln("resp status: %d, result: %s, retrying to connect to the Swan Hub server", resp.StatusCode, string(data))
 			computing.Reconnect(nodeId)
 		}
 		if err != nil {

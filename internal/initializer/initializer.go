@@ -68,12 +68,12 @@ func sendHeartbeatToLag(nodeId string) {
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the Swan Hub server: %v", err)
+		logs.GetLogger().Errorf("Error sending heartbeat, retrying to connect to the LAG server: %v", err)
 		computing.Reconnect(nodeId)
 	} else {
-		_, err := ioutil.ReadAll(resp.Body)
+		data, err := ioutil.ReadAll(resp.Body)
 		if resp.StatusCode != http.StatusOK {
-			logs.GetLogger().Warningln("Retrying to connect to the Swan Hub server")
+			logs.GetLogger().Warningln("resp status: %d, result: %s, retrying to connect to the LAG server", resp.StatusCode, string(data))
 			computing.Reconnect(nodeId)
 		}
 		if err != nil {

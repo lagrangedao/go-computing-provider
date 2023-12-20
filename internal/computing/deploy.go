@@ -40,9 +40,10 @@ type Deploy struct {
 	TaskType          string
 	DeployName        string
 	hardwareDesc      string
+	taskUuid          string
 }
 
-func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration int64) *Deploy {
+func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration int64, taskUuid string) *Deploy {
 	taskType, hardwareDetail := getHardwareDetail(hardwareDesc)
 	return &Deploy{
 		jobUuid:          jobUuid,
@@ -53,6 +54,7 @@ func NewDeploy(jobUuid, hostName, walletAddress, hardwareDesc string, duration i
 		TaskType:         taskType,
 		k8sNameSpace:     constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(walletAddress),
 		hardwareDesc:     hardwareDesc,
+		taskUuid:         taskUuid,
 	}
 }
 
@@ -561,6 +563,7 @@ func (d *Deploy) watchContainerRunningTime() {
 		"deploy_name":    d.DeployName,
 		"hardware":       d.hardwareDesc,
 		"url":            fmt.Sprintf("https://%s", d.hostName),
+		"task_uuid":      d.taskUuid,
 	}
 
 	for key, val := range fields {

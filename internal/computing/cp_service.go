@@ -60,7 +60,7 @@ func ReceiveJob(c *gin.Context) {
 		logHost = "log." + conf.GetConfig().API.Domain
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobSourceURI, hostName, jobData.Duration, jobData.UUID)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobSourceURI, hostName, jobData.Duration, jobData.UUID, jobData.TaskUUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -171,7 +171,7 @@ func RedeployJob(c *gin.Context) {
 		hostName = generateString(10) + conf.GetConfig().API.Domain
 	}
 
-	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobResultURI, hostName, jobData.Duration, jobData.UUID)
+	delayTask, err := celeryService.DelayTask(constants.TASK_DEPLOY, jobData.JobResultURI, hostName, jobData.Duration, jobData.UUID, jobData.TaskUUID)
 	if err != nil {
 		logs.GetLogger().Errorf("Failed sync delpoy task, error: %v", err)
 		return
@@ -276,6 +276,50 @@ func DeleteJob(c *gin.Context) {
 	}
 	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobDetail.WalletAddress)
 	deleteJob(k8sNameSpace, spaceUuid)
+	c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
+}
+
+func CancelJob(c *gin.Context) {
+	taskUuid := c.Query("task_uuid")
+	if taskUuid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "task_uuid is required"})
+		return
+	}
+
+	creatorWallet := c.Query("creator_wallet")
+	if creatorWallet == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "creator_wallet is required"})
+		return
+	}
+
+	conn := redisPool.Get()
+	prefix := constants.REDIS_FULL_PREFIX + "*"
+	keys, err := redis.Strings(conn.Do("KEYS", prefix))
+	if err != nil {
+		logs.GetLogger().Errorf("Failed get redis %s prefix, error: %+v", prefix, err)
+		return
+	}
+
+	var jobDetail models.CacheSpaceDetail
+	for _, key := range keys {
+		jobMetadata, err := RetrieveJobMetadata(key)
+		if err != nil {
+			logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "query data failed"})
+			return
+		}
+		if strings.EqualFold(jobMetadata.TaskUuid, taskUuid) {
+			jobDetail = jobMetadata
+			break
+		}
+	}
+
+	if jobDetail.WalletAddress == "" {
+		c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
+		return
+	}
+	k8sNameSpace := constants.K8S_NAMESPACE_NAME_PREFIX + strings.ToLower(jobDetail.WalletAddress)
+	deleteJob(k8sNameSpace, jobDetail.SpaceUuid)
 	c.JSON(http.StatusOK, util.CreateSuccessResponse("deleted success"))
 }
 
@@ -505,7 +549,7 @@ func handleConnection(conn *websocket.Conn, spaceDetail models.CacheSpaceDetail,
 	}
 }
 
-func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string) string {
+func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string, taskUuid string) string {
 	updateJobStatus(jobUuid, models.JobUploadResult)
 
 	var success bool
@@ -569,6 +613,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		"space_name":     spaceName,
 		"expire_time":    strconv.Itoa(int(time.Now().Unix()) + duration),
 		"space_uuid":     spaceUuid,
+		"task_uuid":      taskUuid,
 	}
 
 	for key, val := range fields {
@@ -581,7 +626,7 @@ func DeploySpaceTask(jobSourceURI, hostName string, duration int, jobUuid string
 		return ""
 	}
 
-	deploy := NewDeploy(jobUuid, hostName, walletAddress, spaceHardware.Description, int64(duration))
+	deploy := NewDeploy(jobUuid, hostName, walletAddress, spaceHardware.Description, int64(duration), taskUuid)
 	deploy.WithSpaceInfo(spaceUuid, spaceName)
 
 	if deploy.hardwareResource.Gpu.Unit != "" {
@@ -805,7 +850,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 	}
 
 	args := append([]interface{}{key}, "wallet_address", "space_name", "expire_time", "space_uuid", "job_uuid",
-		"task_type", "deploy_name", "hardware", "url")
+		"task_type", "deploy_name", "hardware", "url", "task_uuid")
 	valuesStr, err := redis.Strings(redisConn.Do("HMGET", args...))
 	if err != nil {
 		logs.GetLogger().Errorf("Failed get redis key data, key: %s, error: %+v", key, err)
@@ -822,6 +867,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		deployName    string
 		hardware      string
 		url           string
+		taskUuid      string
 	)
 
 	if len(valuesStr) >= 3 {
@@ -834,6 +880,7 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		deployName = valuesStr[6]
 		hardware = valuesStr[7]
 		url = valuesStr[8]
+		taskUuid = valuesStr[9]
 		expireTime, err = strconv.ParseInt(strings.TrimSpace(expireTimeStr), 10, 64)
 		if err != nil {
 			logs.GetLogger().Errorf("Failed convert time str: [%s], error: %+v", expireTimeStr, err)
@@ -851,5 +898,6 @@ func RetrieveJobMetadata(key string) (models.CacheSpaceDetail, error) {
 		DeployName:    deployName,
 		Hardware:      hardware,
 		Url:           url,
+		TaskUuid:      taskUuid,
 	}, nil
 }

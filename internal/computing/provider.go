@@ -24,7 +24,7 @@ func Reconnect(nodeID string) string {
 }
 
 func updateProviderInfo(nodeID, peerID, address string, status string) {
-	updateURL := conf.GetConfig().LAG.ServerUrl + "/cp"
+	updateURL := conf.GetConfig().HUB.ServerUrl + "/cp"
 
 	var cpName string
 	if conf.GetConfig().API.NodeName != "" {
@@ -34,7 +34,7 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 	}
 
 	provider := models.ComputingProvider{
-		PublicAddress: conf.GetConfig().LAG.WalletAddress,
+		PublicAddress: conf.GetConfig().HUB.WalletAddress,
 		Name:          cpName,
 		NodeId:        nodeID,
 		MultiAddress:  conf.GetConfig().API.MultiAddress,
@@ -57,7 +57,7 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 
 	// Set the content type and API token in the request header
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().HUB.AccessToken)
 
 	resp, err := client.Do(req)
 	if err != nil {

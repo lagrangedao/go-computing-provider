@@ -11,14 +11,10 @@ RedisPassword = ""                            # The redis server access password
 CrtFile = "/YOUR_DOMAIN_NAME_CRT_PATH/server.crt"   # Your domain name SSL .crt file path
 KeyFile = "/YOUR_DOMAIN_NAME_KEY_PATH/server.key"   # Your domain name SSL .key file path
 
-[LAG]
-ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
-AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
-WalletAddress = ""                            # The cp wallet address
-
-LagServerUrl = "https://api.lagrangedao.org"
-LagAccessToken = ""
-
+[HUB]
+ServerUrl = "https://swanhub-cali.swanchain.io"     # The swan hub API address
+AccessToken = ""                                    # The swan hub access token
+WalletAddress = ""                                  # The cp wallet address
 
 [MCS]
 ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key
@@ -30,3 +26,12 @@ FileCachePath = "/tmp"                        # Cache directory of job data
 ServerAddress = ""                            # The docker container image registry address, if only a single node, you can ignore
 UserName = ""                                 # The login username, if only a single node, you can ignore
 Password = ""                                 # The login password, if only a single node, you can ignore
+
+[RPC]
+GOERLI_URL = "https://goerli.infura.io/v3/"
+SWAN_TESTNET ="https://rpc-testnet.swanchain.io"
+SWAN_MAINNET= ""
+
+[CONTRACT]
+SWAN_CONTRACT="0x407a5856050053CF1DB54113bd9Ea9D2Eeee7C35"
+SWAN_COLLATERAL_CONTRACT="0xaAea25dF7D20f2098B816486880E4b706DD57044"

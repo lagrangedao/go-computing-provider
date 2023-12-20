@@ -14,7 +14,7 @@ var config *ComputeNode
 type ComputeNode struct {
 	API      API
 	LOG      LOG
-	LAG      LAG
+	HUB      HUB
 	MCS      MCS
 	Registry Registry
 }
@@ -33,12 +33,10 @@ type LOG struct {
 	KeyFile string
 }
 
-type LAG struct {
-	WalletAddress  string
-	ServerUrl      string
-	AccessToken    string
-	LagServerUrl   string
-	LagAccessToken string
+type HUB struct {
+	WalletAddress string
+	ServerUrl     string
+	AccessToken   string
 }
 
 type MCS struct {
@@ -76,7 +74,7 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 	requiredFields := [][]string{
 		{"API"},
 		{"LOG"},
-		{"LAG"},
+		{"HUB"},
 		{"MCS"},
 		{"Registry"},
 
@@ -87,9 +85,9 @@ func requiredFieldsAreGiven(metaData toml.MetaData) bool {
 		{"LOG", "CrtFile"},
 		{"LOG", "KeyFile"},
 
-		{"LAG", "ServerUrl"},
-		{"LAG", "AccessToken"},
-		{"LAG", "WalletAddress"},
+		{"HUB", "ServerUrl"},
+		{"HUB", "AccessToken"},
+		{"HUB", "WalletAddress"},
 
 		{"MCS", "ApiKey"},
 		{"MCS", "BucketName"},

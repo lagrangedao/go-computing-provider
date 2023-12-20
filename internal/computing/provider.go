@@ -34,11 +34,12 @@ func updateProviderInfo(nodeID, peerID, address string, status string) {
 	}
 
 	provider := models.ComputingProvider{
-		Name:         cpName,
-		NodeId:       nodeID,
-		MultiAddress: conf.GetConfig().API.MultiAddress,
-		Autobid:      1,
-		Status:       status,
+		PublicAddress: conf.GetConfig().LAG.WalletAddress,
+		Name:          cpName,
+		NodeId:        nodeID,
+		MultiAddress:  conf.GetConfig().API.MultiAddress,
+		Autobid:       1,
+		Status:        status,
 	}
 
 	jsonData, err := json.Marshal(provider)

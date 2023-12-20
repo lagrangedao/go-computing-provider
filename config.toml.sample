@@ -11,14 +11,10 @@ RedisPassword = ""                            # The redis server access password
 CrtFile = "/YOUR_DOMAIN_NAME_CRT_PATH/server.crt"   # Your domain name SSL .crt file path
 KeyFile = "/YOUR_DOMAIN_NAME_KEY_PATH/server.key"   # Your domain name SSL .key file path
 
-[LAG]
-ServerUrl = "https://api.lagrangedao.org"     # The lagrangedao.org API address
-AccessToken = ""                              # Lagrange access token, acquired from “https://lagrangedao.org  -> setting -> Access Tokens -> New token”
-WalletAddress = ""                            # The cp wallet address
-
-LagServerUrl = "https://api.lagrangedao.org"
-LagAccessToken = ""
-
+[HUB]
+ServerUrl = "https://swanhub-cali.swanchain.io"     # The swan hub API address
+AccessToken = ""                                    # swan hub access token
+WalletAddress = ""                                  # The cp wallet address
 
 [MCS]
 ApiKey = ""                                   # Acquired from "https://www.multichain.storage" -> setting -> Create API Key

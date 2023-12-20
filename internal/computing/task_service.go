@@ -80,8 +80,9 @@ func (s *ScheduleTask) Run() {
 
 func reportJobStatus(jobUuid string, jobStatus models2.JobStatus) {
 	reqParam := map[string]interface{}{
-		"job_uuid": jobUuid,
-		"status":   jobStatus,
+		"job_uuid":       jobUuid,
+		"status":         jobStatus,
+		"public_address": conf.GetConfig().HUB.WalletAddress,
 	}
 
 	payload, err := json.Marshal(reqParam)
@@ -91,13 +92,13 @@ func reportJobStatus(jobUuid string, jobStatus models2.JobStatus) {
 	}
 
 	client := &http.Client{}
-	url := conf.GetConfig().LAG.ServerUrl + "/job/status"
+	url := conf.GetConfig().HUB.ServerUrl + "/job/status"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().HUB.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
@@ -209,9 +210,10 @@ func reportClusterResource(location, nodeId string) {
 		return
 	}
 	clusterSource := models2.ClusterResource{
-		NodeId:      nodeId,
-		Region:      location,
-		ClusterInfo: statisticalSources,
+		NodeId:        nodeId,
+		Region:        location,
+		ClusterInfo:   statisticalSources,
+		PublicAddress: conf.GetConfig().HUB.WalletAddress,
 	}
 
 	payload, err := json.Marshal(clusterSource)
@@ -221,13 +223,13 @@ func reportClusterResource(location, nodeId string) {
 	}
 
 	client := &http.Client{}
-	url := conf.GetConfig().LAG.ServerUrl + "/cp/summary"
+	url := conf.GetConfig().HUB.ServerUrl + "/cp/summary"
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		logs.GetLogger().Errorf("Error creating request: %v", err)
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().HUB.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 
 	resp, err := client.Do(req)

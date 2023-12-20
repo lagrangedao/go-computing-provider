@@ -15,12 +15,12 @@ import (
 
 func sendHeartbeat(nodeId string) {
 	// Replace the following URL with your Flask application's heartbeat endpoint URL
-	heartbeatURL := conf.GetConfig().LAG.ServerUrl + "/cp/heartbeat"
+	heartbeatURL := conf.GetConfig().HUB.ServerUrl + "/cp/heartbeat"
 	payload := strings.NewReader(fmt.Sprintf(`{
 	"public_address": "%s",
     "node_id": "%s",
     "status": "Active"
-}`, conf.GetConfig().LAG.WalletAddress, nodeId))
+}`, conf.GetConfig().HUB.WalletAddress, nodeId))
 
 	client := &http.Client{}
 	req, err := http.NewRequest("POST", heartbeatURL, payload)
@@ -29,7 +29,7 @@ func sendHeartbeat(nodeId string) {
 		return
 	}
 	// Set the API token in the request header (replace "your_api_token" with the actual token)
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().HUB.AccessToken)
 	req.Header.Add("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {

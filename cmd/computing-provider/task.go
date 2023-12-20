@@ -79,11 +79,11 @@ var taskList = &cli.Command{
 			if len(jobDetail.DeployName) > 0 {
 				fullSpaceUuid = jobDetail.DeployName[7:]
 			}
-			if len(fullSpaceUuid) > 0 {
+			if len(jobDetail.TaskUuid) > 0 {
 				nodeID, _, _ := computing.GenerateNodeID(cpPath)
-				spaceInfo, err := getSpaceInfoResponse(nodeID, fullSpaceUuid)
+				spaceInfo, err := getSpaceInfoResponse(nodeID, jobDetail.TaskUuid)
 				if err != nil {
-					log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
+					log.Printf("failed get taskuuid detail: %s, error: %+v \n", jobDetail.TaskUuid, err)
 				} else {
 					spaceStatus = spaceInfo.SpaceStatus
 					rtd = spaceInfo.RunningTime
@@ -96,7 +96,6 @@ var taskList = &cli.Command{
 				taskData = append(taskData,
 					[]string{jobDetail.TaskUuid, jobDetail.TaskType, jobDetail.WalletAddress, fullSpaceUuid, jobDetail.SpaceName, status, spaceStatus, rtd, et, rewards})
 			} else {
-
 				var walletAddress string
 				if len(jobDetail.WalletAddress) > 0 {
 					walletAddress = jobDetail.WalletAddress[:5] + "..." + jobDetail.WalletAddress[37:]
@@ -182,16 +181,12 @@ var taskDetail = &cli.Command{
 			return fmt.Errorf("failed get job status: %s, error: %+v", jobDetail.JobUuid, err)
 		}
 
-		var fullSpaceUuid string
 		var rtd, et, rewards string
-		if len(jobDetail.DeployName) > 0 {
-			fullSpaceUuid = jobDetail.DeployName[7:]
-		}
-		if len(fullSpaceUuid) > 0 {
+		if len(jobDetail.TaskUuid) > 0 {
 			nodeID, _, _ := computing.GenerateNodeID(cpPath)
-			spaceInfo, err := getSpaceInfoResponse(nodeID, fullSpaceUuid)
+			spaceInfo, err := getSpaceInfoResponse(nodeID, jobDetail.TaskUuid)
 			if err != nil {
-				log.Printf("failed get space detail: %s, error: %+v \n", fullSpaceUuid, err)
+				log.Printf("failed get taskuuid detail: %s, error: %+v \n", jobDetail.TaskUuid, err)
 			} else {
 				rtd = spaceInfo.RunningTime
 				et = spaceInfo.RemainingTime
@@ -275,8 +270,8 @@ var taskDelete = &cli.Command{
 	},
 }
 
-func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
-	url := fmt.Sprintf("%s/cp/%s/%s", conf.GetConfig().LAG.ServerUrl, nodeID, spaceUUID)
+func getSpaceInfoResponse(nodeID, taskUuid string) (*SpaceResp, error) {
+	url := fmt.Sprintf("%s/cp/%s/%s", conf.GetConfig().HUB.ServerUrl, nodeID, taskUuid)
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -284,7 +279,7 @@ func getSpaceInfoResponse(nodeID, spaceUUID string) (*SpaceResp, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().LAG.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+conf.GetConfig().HUB.AccessToken)
 
 	resp, err := client.Do(req)
 

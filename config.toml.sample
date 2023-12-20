@@ -13,7 +13,7 @@ KeyFile = "/YOUR_DOMAIN_NAME_KEY_PATH/server.key"   # Your domain name SSL .key 
 
 [HUB]
 ServerUrl = "https://swanhub-cali.swanchain.io"     # The swan hub API address
-AccessToken = ""                                    # swan hub access token
+AccessToken = ""                                    # The swan hub access token
 WalletAddress = ""                                  # The cp wallet address
 
 [MCS]
